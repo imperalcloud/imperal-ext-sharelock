@@ -1,0 +1,334 @@
+{
+  "manifest_schema_version": 3,
+  "app_id": "sharelock-v2",
+  "version": "3.0.0",
+  "name": "Sharelock",
+  "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
+  "icon": "icon.svg",
+  "actions_explicit": true,
+  "capabilities": [
+    "sharelock:cases:read",
+    "sharelock:cases:write",
+    "sharelock:analysis:run",
+    "sharelock:analysis:cancel",
+    "sharelock:reports:read",
+    "sharelock:reports:write",
+    "storage:read",
+    "storage:write",
+    "store:read",
+    "store:write",
+    "config:read",
+    "config:write",
+    "ai:complete",
+    "notify:push"
+  ],
+  "tools": [
+    {
+      "name": "tool_sharelock_chat",
+      "description": "Sharelock AI forensic investigator — case analysis, evidence review, intelligence reports",
+      "scopes": [],
+      "parameters": {
+        "message": {
+          "type": "string",
+          "required": false
+        },
+        "kwargs": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "synthetic": false
+    },
+    {
+      "name": "skeleton_refresh_case_status",
+      "description": "Sharelock case roster + active-case snapshot for classifier.",
+      "scopes": [],
+      "parameters": {
+        "kwargs": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "synthetic": false
+    },
+    {
+      "name": "skeleton_alert_case_status",
+      "description": "Skeleton alert",
+      "scopes": [],
+      "parameters": {
+        "kwargs": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "synthetic": false
+    },
+    {
+      "name": "__panel__sidebar",
+      "description": "Panel: Sharelock",
+      "scopes": [],
+      "parameters": {
+        "params": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "name": "__panel__dashboard",
+      "description": "Panel: Case Details",
+      "scopes": [],
+      "parameters": {
+        "params": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "synthetic": true
+    },
+    {
+      "name": "case_chat",
+      "description": "Chat about a forensic investigation case",
+      "action_type": "read",
+      "chain_callable": false,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "message": {
+            "default": "",
+            "description": "User message about the case",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CaseChatParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "create_case",
+      "description": "Create a new investigation case",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "name": {
+            "description": "Name for the new investigation case",
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "description": "Case description",
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateCaseParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sync_cases",
+      "description": "Sync cases from Nextcloud folders — create cases for new folders",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {},
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "list_cases",
+      "description": "List all investigation cases",
+      "action_type": "read",
+      "chain_callable": false,
+      "effects": [],
+      "params_schema": {},
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "search_docs",
+      "description": "Search case documents for entities, amounts, dates",
+      "action_type": "read",
+      "chain_callable": false,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "query": {
+            "description": "Search term (entity name, amount, date)",
+            "title": "Query",
+            "type": "string"
+          },
+          "case_id": {
+            "default": 0,
+            "description": "Case ID (0 = active case)",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchDocsParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "run_analysis",
+      "description": "Start deep forensic analysis on a case",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseIdParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "cancel_analysis",
+      "description": "Cancel the current analysis run for a case",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseIdParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "review_analysis_gaps",
+      "description": "Review gaps found during analysis",
+      "action_type": "read",
+      "chain_callable": false,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseIdParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "continue_analysis",
+      "description": "Continue analysis despite flagged gaps",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseIdParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "resume_with_new_evidence",
+      "description": "Pause analysis so you can upload more evidence, then run again",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseIdParams",
+        "type": "object"
+      },
+      "return_schema": {},
+      "event": "",
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    }
+  ],
+  "signals": [],
+  "schedules": [],
+  "required_scopes": [],
+  "icon_size_bytes": 320,
+  "lifecycle": {
+    "health_check": {
+      "interval_sec": 60
+    }
+  }
+}
