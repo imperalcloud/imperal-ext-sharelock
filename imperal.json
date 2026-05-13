@@ -1,11 +1,13 @@
 {
   "manifest_schema_version": 3,
+  "sdk_version": "4.2.9",
   "app_id": "sharelock-v2",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
   "actions_explicit": true,
+  "system": false,
   "capabilities": [
     "sharelock:cases:read",
     "sharelock:cases:write",
@@ -36,8 +38,7 @@
           "type": "string",
           "required": true
         }
-      },
-      "synthetic": false
+      }
     },
     {
       "name": "skeleton_refresh_case_status",
@@ -48,8 +49,7 @@
           "type": "string",
           "required": true
         }
-      },
-      "synthetic": false
+      }
     },
     {
       "name": "skeleton_alert_case_status",
@@ -60,44 +60,20 @@
           "type": "string",
           "required": true
         }
-      },
-      "synthetic": false
-    },
-    {
-      "name": "__panel__sidebar",
-      "description": "Panel: Sharelock",
-      "scopes": [],
-      "parameters": {
-        "params": {
-          "type": "string",
-          "required": true
-        }
-      },
-      "synthetic": true
-    },
-    {
-      "name": "__panel__dashboard",
-      "description": "Panel: Case Details",
-      "scopes": [],
-      "parameters": {
-        "params": {
-          "type": "string",
-          "required": true
-        }
-      },
-      "synthetic": true
+      }
     },
     {
       "name": "case_chat",
-      "description": "Chat about a forensic investigation case",
+      "description": "Chat about a forensic investigation case. CRITICAL: pass the user's message VERBATIM in the `message` parameter — preserve case names, ids, and original language exactly. Do NOT paraphrase, translate, or summarize.",
       "action_type": "read",
       "chain_callable": false,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "message": {
             "default": "",
-            "description": "User message about the case",
+            "description": "User's VERBATIM message about the case. Pass EXACTLY as user typed — preserve case names ('Test Files', 'Alex Case 1'), case ids ('#3812', 'дело 17'), and original language (RU/EN). The handler does deterministic case-name and id matching against this string; paraphrasing or translating breaks resolution and silently drops the user into the case-list fallback.",
             "title": "Message",
             "type": "string"
           }
@@ -112,20 +88,21 @@
     },
     {
       "name": "create_case",
-      "description": "Create a new investigation case",
+      "description": "Create a new investigation case. CRITICAL: pass user-supplied `name` and `description` VERBATIM in the original language (RU/EN). Do NOT paraphrase, translate, sanitise, or auto-title. Federal anti-hallucination invariant I-CHAT-FUNCTION-VERBATIM-PARAMS applies — rephrased input silently breaks dedupe.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "name": {
-            "description": "Name for the new investigation case",
+            "description": "Name for the new investigation case. CRITICAL: pass VERBATIM as the user typed it — preserve exact wording, capitalisation, and original language (RU/EN). Do NOT paraphrase, translate, sanitise, or auto-title. Downstream validation enforces uniqueness against the user's exact string; rephrased names silently create duplicates.",
             "title": "Name",
             "type": "string"
           },
           "description": {
             "default": "",
-            "description": "Case description",
+            "description": "Case description. CRITICAL: pass VERBATIM in the user's original language. Do NOT paraphrase, translate, or expand. Empty string if the user did not provide one.",
             "title": "Description",
             "type": "string"
           }
@@ -147,6 +124,7 @@
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {},
       "return_schema": {},
       "event": "",
@@ -159,6 +137,7 @@
       "action_type": "read",
       "chain_callable": false,
       "effects": [],
+      "id_projection": "",
       "params_schema": {},
       "return_schema": {},
       "event": "",
@@ -167,14 +146,15 @@
     },
     {
       "name": "search_docs",
-      "description": "Search case documents for entities, amounts, dates",
+      "description": "Search case documents for entities, amounts, dates, or phrases. CRITICAL: pass the user-supplied `query` VERBATIM — preserve exact spelling, punctuation, amounts, and original language. Do NOT paraphrase, translate, normalise, or auto-correct. The Cases API performs exact substring matching.",
       "action_type": "read",
       "chain_callable": false,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "query": {
-            "description": "Search term (entity name, amount, date)",
+            "description": "Search term (entity name, amount, date, phrase). CRITICAL: pass VERBATIM as the user typed it — preserve exact spelling, punctuation, amounts, and original language. Do NOT paraphrase, translate, normalise, or auto-correct. The Cases API does exact substring matching; rephrased queries return empty results.",
             "title": "Query",
             "type": "string"
           },
@@ -202,6 +182,7 @@
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "case_id": {
@@ -227,6 +208,7 @@
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "case_id": {
@@ -252,6 +234,7 @@
       "action_type": "read",
       "chain_callable": false,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "case_id": {
@@ -277,6 +260,7 @@
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "case_id": {
@@ -302,6 +286,7 @@
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
+      "id_projection": "",
       "params_schema": {
         "properties": {
           "case_id": {

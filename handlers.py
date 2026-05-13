@@ -43,12 +43,29 @@ class CaseChatParams(BaseModel):
 
 
 class CreateCaseParams(BaseModel):
-    name: str = Field(..., description="Name for the new investigation case")
-    description: str = Field("", description="Case description")
+    name: str = Field(..., description=(
+        "Name for the new investigation case. CRITICAL: pass VERBATIM as the "
+        "user typed it — preserve exact wording, capitalisation, and "
+        "original language (RU/EN). Do NOT paraphrase, translate, "
+        "sanitise, or auto-title. Downstream validation enforces "
+        "uniqueness against the user's exact string; rephrased names "
+        "silently create duplicates."
+    ))
+    description: str = Field("", description=(
+        "Case description. CRITICAL: pass VERBATIM in the user's original "
+        "language. Do NOT paraphrase, translate, or expand. Empty string "
+        "if the user did not provide one."
+    ))
 
 
 class SearchDocsParams(BaseModel):
-    query: str = Field(..., description="Search term (entity name, amount, date)")
+    query: str = Field(..., description=(
+        "Search term (entity name, amount, date, phrase). CRITICAL: pass "
+        "VERBATIM as the user typed it — preserve exact spelling, "
+        "punctuation, amounts, and original language. Do NOT paraphrase, "
+        "translate, normalise, or auto-correct. The Cases API does exact "
+        "substring matching; rephrased queries return empty results."
+    ))
     case_id: int = Field(0, description="Case ID (0 = active case)")
 
 
@@ -251,7 +268,14 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
 
 
 @chat.function("create_case", action_type="write",
-               description="Create a new investigation case")
+               description=(
+                   "Create a new investigation case. CRITICAL: pass "
+                   "user-supplied `name` and `description` VERBATIM in the "
+                   "original language (RU/EN). Do NOT paraphrase, "
+                   "translate, sanitise, or auto-title. Federal anti-"
+                   "hallucination invariant I-CHAT-FUNCTION-VERBATIM-PARAMS "
+                   "applies — rephrased input silently breaks dedupe."
+               ))
 async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
     """Create case in Cases API + folder in Nextcloud (B7: validate + dedupe)."""
     user_id = _user_id(ctx)
@@ -359,7 +383,14 @@ async def fn_list_cases(ctx, params=None) -> ActionResult:
 
 
 @chat.function("search_docs", action_type="read",
-               description="Search case documents for entities, amounts, dates")
+               description=(
+                   "Search case documents for entities, amounts, dates, "
+                   "or phrases. CRITICAL: pass the user-supplied `query` "
+                   "VERBATIM — preserve exact spelling, punctuation, "
+                   "amounts, and original language. Do NOT paraphrase, "
+                   "translate, normalise, or auto-correct. The Cases API "
+                   "performs exact substring matching."
+               ))
 async def fn_search_docs(ctx, params: SearchDocsParams) -> ActionResult:
     """Search case documents via Cases API."""
     case_id = params.case_id
