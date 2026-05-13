@@ -170,28 +170,18 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     in message → cached active-case hint → unique name match → single-case
     fallback). Panel users should mention the case name or id explicitly.
 
-    NOTE on legacy ChatExtension paraphrase: ``tool_sharelock_chat`` runs
-    an LLM tool-use loop that frequently paraphrases the user's turn and
-    drops the case name (live evidence 2026-05-02:
-    "о чем кейс test files?" → "What is this case about?..."). When that
-    happens ``params.message`` no longer carries the resolution signal.
-    We try resolve_case_id against the RAW user turn from ``ctx.history``
-    first, falling back to the rephrased message.
+    Verbatim-message contract (v3.1.3, 2026-05-13): kernel typed dispatch
+    + I-CHAT-FUNCTION-VERBATIM-PARAMS + classifier action_plan extension
+    for reads guarantee that ``params.message`` is the user's RAW turn,
+    not a wrapper-LLM paraphrase. The earlier raw_message recovery hack
+    (which walked ctx.history to recover the user's actual phrasing) is
+    removed — handlers can trust their typed args. Wrapper-LLM only
+    reaches case_chat for conversational catch-all where the classifier
+    intentionally left action_plan=null; that path also preserves
+    verbatim per the decorator-description + system_prompt rule #8.
     """
     user_id = _user_id(ctx)
     message = params.message
-
-    # Recover raw user turn so resolve_case_id sees explicit case mentions
-    # even when the legacy ChatExtension wrapper LLM has paraphrased them.
-    raw_message = message
-    try:
-        history = ctx.history if hasattr(ctx, "history") else []
-        if history:
-            last = history[-1]
-            if last.get("role") == "user" and isinstance(last.get("content"), str):
-                raw_message = last["content"]
-    except Exception:
-        pass
 
     # Seed the active-case hint from cache (kept by skeleton refresh). If
     # the cache is cold the first call populates it via the Cases API.
@@ -204,14 +194,8 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     panel_case_id = None  # See docstring — reinstated once panel→chat ctx lands.
 
     case_id, resolution = await resolve_case_id(
-        user_id, raw_message, panel_case_id, skeleton_case_id,
+        user_id, message, panel_case_id, skeleton_case_id,
     )
-    # Belt-and-braces: rephrased message occasionally keeps the name even
-    # when raw didn't match — try it as a secondary path.
-    if not case_id and raw_message != message:
-        case_id, resolution = await resolve_case_id(
-            user_id, message, panel_case_id, skeleton_case_id,
-        )
 
     # Pull the per-case summary (separate cache slot per case_id).
     # FIX 2026-05-02: ALWAYS refresh per-case data when case_id is resolved.
