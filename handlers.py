@@ -31,6 +31,16 @@ log = logging.getLogger("sharelock-v2.handlers")
 # ── Parameter Models ──────────────────────────────────────────────────────────
 
 
+class EmptyParams(BaseModel):
+    """Federal V17 placeholder for handlers that take no parameters.
+
+    `@chat.function` MUST declare a Pydantic params model — this is the
+    canonical empty model reused by read-only handlers (list_*, sync_*,
+    *_health) that don't need any input.
+    """
+    pass
+
+
 class CaseChatParams(BaseModel):
     message: str = Field("", description=(
         "User's VERBATIM message about the case. Pass EXACTLY as user typed "
@@ -319,7 +329,7 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
 
 @chat.function("sync_cases", action_type="write",
                description="Sync cases from Nextcloud folders — create cases for new folders")
-async def fn_sync_cases(ctx, params=None) -> ActionResult:
+async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
     """Scan Nextcloud for folders, create cases for any that don't exist yet."""
     user_id = _user_id(ctx)
     try:
@@ -363,7 +373,7 @@ async def fn_sync_cases(ctx, params=None) -> ActionResult:
 
 @chat.function("list_cases", action_type="read",
                description="List all investigation cases")
-async def fn_list_cases(ctx, params=None) -> ActionResult:
+async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
     """List all cases for the current user."""
     user_id = _user_id(ctx)
     try:
