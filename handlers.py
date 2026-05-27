@@ -24,6 +24,7 @@ from case_resolver import resolve_case_id, load_case_data_from_api
 from cache_models import CaseSummary
 from files import create_backend
 from validation import validate_case_name, folder_exists, list_top_folders
+from models import CaseChatResponse, CaseListResponse, DocSearchResponse
 
 log = logging.getLogger("sharelock-v2.handlers")
 
@@ -149,6 +150,7 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
 
 
 @chat.function("case_chat", action_type="read",
+               data_model=CaseChatResponse,
                description=(
                    "Chat about a forensic investigation case. "
                    "CRITICAL: pass the user's message VERBATIM in the "
@@ -356,6 +358,7 @@ async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
 
 
 @chat.function("list_cases", action_type="read",
+               data_model=CaseListResponse,
                description="List all investigation cases")
 async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
     """List all cases for the current user."""
@@ -377,6 +380,7 @@ async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
 
 
 @chat.function("search_docs", action_type="read",
+               data_model=DocSearchResponse,
                description=(
                    "Search case documents for entities, amounts, dates, "
                    "or phrases. CRITICAL: pass the user-supplied `query` "

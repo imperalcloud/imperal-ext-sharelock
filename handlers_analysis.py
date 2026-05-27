@@ -13,6 +13,7 @@ from app import chat, _user_id, _user_agency
 from imperal_sdk.chat import ActionResult
 import queries
 from queries import CasesAPIError
+from models import GapReviewResponse
 
 log = logging.getLogger("sharelock-v2.handlers_analysis")
 
@@ -105,6 +106,7 @@ async def fn_cancel_analysis(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("review_analysis_gaps", action_type="read",
+               data_model=GapReviewResponse,
                description="Review gaps found during analysis")
 async def fn_review_analysis_gaps(ctx, params: CaseIdParams) -> ActionResult:
     """Fetch gaps for the latest run, format chat summary + structured data.
