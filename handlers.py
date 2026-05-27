@@ -150,7 +150,7 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
 
 
 @chat.function("case_chat", action_type="read",
-               chain_callable=False,  # Federal: case_chat reads ctx.history; typed dispatch drops history → MUST stay on wrapper-LLM path
+               chain_callable=True,  # SDK 5.0+ has no wrapper-LLM fallback; chain_callable=False causes kernel disambiguation to pick wrong tool (live trace 2026-05-27: «Расскажи о нем детально» misrouted to create_case). resolve_case_id is deterministic regardless of history; chat_engine degrades gracefully if ctx.history is empty.
                data_model=CaseChatResponse,
                description=(
                    "Chat about a forensic investigation case. "

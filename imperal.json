@@ -51,7 +51,7 @@
       "name": "case_chat",
       "description": "Chat about a forensic investigation case. CRITICAL: pass the user's message VERBATIM in the `message` parameter — preserve case names, ids, and original language exactly. Do NOT paraphrase, translate, or summarize.",
       "action_type": "read",
-      "chain_callable": false,
+      "chain_callable": true,
       "effects": [],
       "id_projection": "",
       "params_schema": {
