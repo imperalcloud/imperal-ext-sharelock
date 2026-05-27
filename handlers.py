@@ -150,6 +150,7 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
 
 
 @chat.function("case_chat", action_type="read",
+               chain_callable=False,  # Federal: case_chat reads ctx.history; typed dispatch drops history → MUST stay on wrapper-LLM path
                data_model=CaseChatResponse,
                description=(
                    "Chat about a forensic investigation case. "

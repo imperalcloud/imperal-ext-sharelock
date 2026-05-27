@@ -42,3 +42,22 @@ def test_every_read_handler_has_data_model():
         if "data_model" not in kwargs:
             missing.append(f"{fname}:{lineno} {fn_name}")
     assert not missing, "Read handlers missing data_model=: " + ", ".join(missing)
+
+
+def test_case_chat_chain_callable_false():
+    """case_chat consumes ctx.history; typed dispatch drops history. Must stay on wrapper-LLM path."""
+    import pytest
+    for fname, lineno, fn_name, kwargs in _walk_chat_function_decorators():
+        if fn_name != "case_chat":
+            continue
+        cc = kwargs.get("chain_callable")
+        assert cc is not None, (
+            f"case_chat at {fname}:{lineno} must explicitly set chain_callable=False "
+            f"(history-dependent handler must NOT default to True)"
+        )
+        assert isinstance(cc, ast.Constant) and cc.value is False, (
+            f"case_chat at {fname}:{lineno} chain_callable must be False, "
+            f"got {ast.dump(cc)}"
+        )
+        return
+    pytest.fail("case_chat handler not found in handlers.py")
