@@ -6,13 +6,14 @@ Mirrors the kernel's V23 validator behaviour.
 import ast
 from pathlib import Path
 
-READ_HANDLER_FILES = ["handlers.py", "handlers_analysis.py"]
+_EXT_ROOT = Path(__file__).resolve().parent.parent
+_HANDLER_FILES = ["handlers.py", "handlers_analysis.py"]
 
 
 def _walk_chat_function_decorators():
     """Yield (file, lineno, name, decorator_kwargs) for every @chat.function in the listed files."""
-    for fname in READ_HANDLER_FILES:
-        src = Path(fname).read_text()
+    for fname in _HANDLER_FILES:
+        src = (_EXT_ROOT / fname).read_text()
         tree = ast.parse(src)
         for node in ast.walk(tree):
             if not isinstance(node, ast.AsyncFunctionDef):
