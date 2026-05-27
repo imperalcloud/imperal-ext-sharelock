@@ -196,8 +196,14 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     skeleton_case_id = seed_summary.active_case_id
     panel_case_id = None  # See docstring — reinstated once panel→chat ctx lands.
 
+    # SDK 5.0+ typed dispatch passes ctx.history; pronoun follow-ups
+    # («о нем», «расскажи дальше») rely on scanning recent USER turns for
+    # the case the user was discussing. Live trace 2026-05-27 added this
+    # path because the legacy wrapper-LLM history channel is gone.
+    _history = getattr(ctx, "history", None) or []
     case_id, resolution = await resolve_case_id(
         user_id, message, panel_case_id, skeleton_case_id,
+        history=_history,
     )
 
     # Pull the per-case summary (separate cache slot per case_id).

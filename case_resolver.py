@@ -306,26 +306,118 @@ async def pick_fallback_single_case(user_id: str) -> int | None:
     return None
 
 
+async def resolve_case_from_history(
+    user_id: str,
+    history: list | None,
+    max_turns: int = 6,
+) -> tuple[int | None, str | None]:
+    """Scan recent USER turns for the most recently mentioned case.
+
+    Pronoun follow-ups («о нем», «расскажи дальше», «детальнее») don't carry
+    the case name themselves — they reference a case from a prior turn. The
+    most-recent USER turn that names a case is the focus.
+
+    Scan newest-first across the last ``max_turns`` history entries. For each
+    user turn:
+      - try full case-name substring match (case-insensitive); longest name wins;
+      - then try embedded integer matching the user's real case_ids.
+    First hit wins. Assistant turns are NOT scanned to avoid picking up cases
+    the bot rendered but the user did not engage with.
+
+    Returns ``(case_id, "history_name"|"history_id")`` or ``(None, None)``.
+    """
+    if not history:
+        return None, None
+    try:
+        cases = await queries.get_cases(user_id)
+    except Exception as e:
+        log.warning(f"resolve_case_from_history: get_cases({user_id}) failed: {e}")
+        return None, None
+    if not cases:
+        return None, None
+
+    user_case_ids = {int(c.get("id")) for c in cases if c.get("id") is not None}
+    case_names_by_id: dict[int, str] = {}
+    for c in cases:
+        cid = c.get("id")
+        name = (c.get("name") or "").strip()
+        if cid is not None and name and len(name) >= _MIN_NAME_LENGTH:
+            try:
+                case_names_by_id[int(cid)] = name
+            except (TypeError, ValueError):
+                continue
+
+    def _extract_text(content) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text" and isinstance(block.get("text"), str):
+                        parts.append(block["text"])
+                    elif isinstance(block.get("text"), str):
+                        parts.append(block["text"])
+            return " ".join(parts)
+        return ""
+
+    import re as _re
+
+    recent = list(reversed(history[-max_turns:]))
+    for turn in recent:
+        if not isinstance(turn, dict):
+            continue
+        if (turn.get("role") or "").lower() != "user":
+            continue
+        text = _extract_text(turn.get("content"))
+        if not text:
+            continue
+        text_lower = text.lower()
+
+        # Step 1: name match — longest name wins so "Alex Case 1" beats "Alex".
+        best_id: int | None = None
+        best_len = 0
+        for cid, name in case_names_by_id.items():
+            if name.lower() in text_lower and len(name) > best_len:
+                best_id = cid
+                best_len = len(name)
+        if best_id is not None:
+            return best_id, "history_name"
+
+        # Step 2: embedded id — first integer matching a real case_id wins.
+        for m in _re.finditer(r"\b(\d{1,7})\b", text):
+            try:
+                ival = int(m.group(1))
+                if ival > 0 and ival in user_case_ids:
+                    return ival, "history_id"
+            except ValueError:
+                continue
+
+    return None, None
+
+
 async def resolve_case_id(
     user_id: str,
     message: str,
     panel_case_id: int | None,
     skeleton_case_id: int | None,
+    history: list | None = None,
 ) -> tuple[int | None, str | None]:
     """Apply the full resolution order. Returns ``(case_id, path)``.
 
     ``path`` is one of: ``panel``, ``name_match``, ``regex_id``,
+    ``embedded_id``, ``explicit_id``, ``history_name``, ``history_id``,
     ``skeleton``, ``single_case``, or ``None`` if unresolved.
 
-    ORDER (FIX 2026-05-02):
-      1. panel_case_id  — explicit panel selection from the UI.
-      2. resolve_case_from_message — name_match (longest sub-match wins),
-         then regex_id validated against the user\'s real case_ids.
-         This block is now EARLIER than `skeleton_case_id` because an
-         explicit case-name mention in the message is stronger evidence
-         of intent than a cached "what was active last turn" hint.
-      3. skeleton_case_id — recent active-case hint from the skeleton.
-      4. pick_fallback_single_case — single-case-only fallback.
+    ORDER (current turn → recent turns → cached hints → fallback):
+      1. ``panel_case_id``  — explicit panel selection from the UI.
+      2. ``resolve_case_from_message`` — current turn name_match / id match.
+      3. ``resolve_case_from_history`` — most-recent USER turn that mentioned
+         a case (added 2026-05-27 to recover pronoun follow-ups under SDK 5.0+
+         typed dispatch where the wrapper-LLM history channel no longer
+         resolves the case for the handler).
+      4. ``skeleton_case_id`` — cached active-case hint from the skeleton.
+      5. ``pick_fallback_single_case`` — single-case-only fallback.
     """
     if panel_case_id:
         return panel_case_id, "panel"
@@ -333,6 +425,11 @@ async def resolve_case_id(
     cid, path = await resolve_case_from_message(user_id, message)
     if cid:
         return cid, path
+
+    if history:
+        cid, path = await resolve_case_from_history(user_id, history)
+        if cid:
+            return cid, path
 
     if skeleton_case_id:
         return skeleton_case_id, "skeleton"
