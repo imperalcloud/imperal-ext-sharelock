@@ -11,49 +11,100 @@ UserBalancesResponse).
 """
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from imperal_sdk import sdl
 
 
 # ── Row types (nested inside envelopes) ────────────────────────────────────────
+#
+# SDL migration (SDK 5.2.0): per-row types are now ``sdl.Entity`` subclasses
+# composed with the facets that fit their fields. This is a STRICTLY ADDITIVE
+# change — every existing field is kept verbatim (panels, the gap-review UI, and
+# the kernel data_model validators rely on them). The canonical ``id``/``title``/
+# ``kind`` are derived from existing fields via a mode="before" validator so all
+# existing construction sites (raw Cases API dicts) keep working unchanged.
 
 
-class CaseRecord(BaseModel):
+class CaseRecord(sdl.Entity, sdl.Caseable):
     """One row from list_cases.data["cases"][] / case-summary lookups.
 
     Mirrors the dict shape produced by handlers.py:117-122 and
     handlers.py:367-369. Cases API may return either `status` or
     `analysis_status` (the handler does `c.get("analysis_status") or
     c.get("status")` — both are present in different code paths).
+
+    SDL: a forensic investigation case → ``sdl.Caseable`` (sec.case_*).
+    Canonical id <- existing ``id``; title <- existing ``name``.
     """
-    id: int
+    kind: str = "case"
+    # --- existing fields kept verbatim (panels / gap-review / API rows rely on them) ---
     name: str
     analysis_status: str | None = None
     status: str | None = None
     file_count: int = 0
 
+    @model_validator(mode="before")
+    @classmethod
+    def _sdl_canon(cls, data):
+        if isinstance(data, dict):
+            data.setdefault("id", data.get("id") or 0)
+            data.setdefault("title", data.get("name") or data.get("id") or "")
+        return data
 
-class DocSearchHit(BaseModel):
+
+class DocSearchHit(sdl.Entity):
     """One hit from search_docs.data["results"][].
 
     Cases API response shape varies; fields are permissive except `doc_id`
     which is the primary identifier and is reliably present in real hits.
+
+    SDL: a single document search hit. Canonical id <- existing ``doc_id``;
+    title <- ``snippet`` (falling back to ``doc_id``). No standard facet maps
+    cleanly to ``score`` (float relevance) / ``snippet`` without a type clash,
+    so this stays a bare ``sdl.Entity``.
     """
+    kind: str = "doc_hit"
+    # --- existing fields kept verbatim ---
     doc_id: str
     snippet: str | None = None
     score: float | None = None
     case_id: int | None = None  # symmetric with SearchDocsParams.case_id
 
+    @model_validator(mode="before")
+    @classmethod
+    def _sdl_canon(cls, data):
+        if isinstance(data, dict):
+            data.setdefault("id", data.get("doc_id") or "")
+            data.setdefault("title", data.get("snippet") or data.get("doc_id") or "")
+        return data
 
-class GapReviewItem(BaseModel):
+
+class GapReviewItem(sdl.Entity):
     """One row from review_analysis_gaps.data["gaps"][] / .data["by_severity"][sev][].
 
     Fields observed in handlers_analysis.py:122-145 — severity comes from
     Cases API gap rows (BLOCKING/QUALITY/INFORMATIONAL); description is the
     first line of the gap's full description.
+
+    SDL: a single analysis gap. Canonical id <- existing ``id``; title <-
+    ``description``. NOTE deliberately NOT mixing ``sdl.Prioritized``: its
+    ``severity`` is a fixed Literal['info','minor','major','critical'] that
+    would reject Sharelock's BLOCKING/QUALITY/INFORMATIONAL values — keeping
+    the existing free-string ``severity`` preserves back-compat.
     """
-    id: int | None = None
+    kind: str = "gap"
+    # --- existing fields kept verbatim ---
     severity: str | None = None
     description: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sdl_canon(cls, data):
+        if isinstance(data, dict):
+            data.setdefault("id", data.get("id") or "")
+            data.setdefault("title", data.get("description") or "")
+        return data
 
 
 # ── Envelopes (the actual data_model= targets) ─────────────────────────────────
