@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.0",
   "app_id": "sharelock-v2",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -91,7 +91,10 @@
       "description": "Create a new investigation case. CRITICAL: pass user-supplied `name` and `description` VERBATIM in the original language (RU/EN). Do NOT paraphrase, translate, sanitise, or auto-title. Federal anti-hallucination invariant I-CHAT-FUNCTION-VERBATIM-PARAMS applies — rephrased input silently breaks dedupe.",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "create:case",
+        "create:folder"
+      ],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -113,7 +116,32 @@
         "title": "CreateCaseParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "create_case success envelope. handlers.py: data={\"case_id\", \"name\"}.\n\n`case_id` is the Cases API id (int); the handler falls back to the\nstring \"?\" only when the API omits an id — hence ``int | str``.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "name"
+        ],
+        "title": "CreateCaseResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,
@@ -125,7 +153,9 @@
       "description": "Sync cases from Nextcloud folders — create cases for new folders",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "create:case"
+      ],
       "id_projection": "",
       "params_schema": {
         "description": "Federal V17 placeholder for handlers that take no parameters.\n\n`@chat.function` MUST declare a Pydantic params model — this is the\ncanonical empty model reused by read-only handlers (list_*, sync_*,\n*_health) that don't need any input.",
@@ -133,7 +163,34 @@
         "title": "EmptyParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "sync_cases success envelope.\n\nhandlers.py: data={\"created\", \"skipped\", \"total_folders\"} — `created`\nand `skipped` are Nextcloud folder names; `total_folders` is the scan size.",
+        "properties": {
+          "created": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "total_folders": {
+            "default": 0,
+            "title": "Total Folders",
+            "type": "integer"
+          }
+        },
+        "title": "SyncCasesResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,
@@ -156,11 +213,168 @@
       "return_schema": {
         "$defs": {
           "CaseRecord": {
-            "description": "One row from list_cases.data[\"cases\"][] / case-summary lookups.\n\nMirrors the dict shape produced by handlers.py:117-122 and\nhandlers.py:367-369. Cases API may return either `status` or\n`analysis_status` (the handler does `c.get(\"analysis_status\") or\nc.get(\"status\")` — both are present in different code paths).",
+            "description": "One row from list_cases.data[\"cases\"][] / case-summary lookups.\n\nMirrors the dict shape produced by handlers.py:117-122 and\nhandlers.py:367-369. Cases API may return either `status` or\n`analysis_status` (the handler does `c.get(\"analysis_status\") or\nc.get(\"status\")` — both are present in different code paths).\n\nSDL: a forensic investigation case → ``sdl.Caseable`` (sec.case_*).\nCanonical id <- existing ``id``; title <- existing ``name``.",
             "properties": {
+              "case_number": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Case Number",
+                "x-sdl-role": "sec.case_number"
+              },
+              "case_type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Case Type",
+                "x-sdl-role": "sec.case_type"
+              },
+              "case_stage": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Case Stage",
+                "x-sdl-role": "sec.case_stage"
+              },
+              "opened_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Opened At",
+                "x-sdl-role": "sec.opened_at"
+              },
+              "closed_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Closed At",
+                "x-sdl-role": "sec.closed_at"
+              },
+              "case_resolution": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Case Resolution",
+                "x-sdl-role": "sec.case_resolution"
+              },
+              "jurisdiction": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Jurisdiction",
+                "x-sdl-role": "sec.jurisdiction"
+              },
               "id": {
-                "title": "Id",
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "case",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
               },
               "name": {
                 "title": "Name",
@@ -178,18 +392,6 @@
                 "default": null,
                 "title": "Analysis Status"
               },
-              "status": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Status"
-              },
               "file_count": {
                 "default": 0,
                 "title": "File Count",
@@ -198,10 +400,12 @@
             },
             "required": [
               "id",
+              "title",
               "name"
             ],
             "title": "CaseRecord",
-            "type": "object"
+            "type": "object",
+            "x-sdl": "entity"
           }
         },
         "description": "Envelope returned by list_cases — describes the full `data` dict.\n\nHandlers.py:371-374: `data={\"cases\": cases, \"count\": len(cases)}`.",
@@ -261,8 +465,76 @@
       "return_schema": {
         "$defs": {
           "DocSearchHit": {
-            "description": "One hit from search_docs.data[\"results\"][].\n\nCases API response shape varies; fields are permissive except `doc_id`\nwhich is the primary identifier and is reliably present in real hits.",
+            "description": "One hit from search_docs.data[\"results\"][].\n\nCases API response shape varies; fields are permissive except `doc_id`\nwhich is the primary identifier and is reliably present in real hits.\n\nSDL: a single document search hit. Canonical id <- existing ``doc_id``;\ntitle <- ``snippet`` (falling back to ``doc_id``). No standard facet maps\ncleanly to ``score`` (float relevance) / ``snippet`` without a type clash,\nso this stays a bare ``sdl.Entity``.",
             "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "doc_hit",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
               "doc_id": {
                 "title": "Doc Id",
                 "type": "string"
@@ -305,10 +577,13 @@
               }
             },
             "required": [
+              "id",
+              "title",
               "doc_id"
             ],
             "title": "DocSearchHit",
-            "type": "object"
+            "type": "object",
+            "x-sdl": "entity"
           }
         },
         "description": "Envelope returned by search_docs.\n\nHandlers.py:420-422 (404 path): `data={\"results\": []}`.\nHandlers.py:427-430 (success path): `data=results` (raw API response,\nmay be a list directly OR may be {\"count\":..., \"results\": [...]}).\nWe model the consistent shape `{\"results\": [...]}`. The success path\nwhere Cases API returns a raw list will round-trip without validation\nerror because Pydantic accepts the dict-or-list-as-data when data_model\nruntime validation is warn-only (5.0.1).",
@@ -336,7 +611,9 @@
       "description": "Start deep forensic analysis on a case",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "run:analysis"
+      ],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -352,7 +629,55 @@
         "title": "CaseIdParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "run_analysis success envelope.\n\nhandlers_analysis.py: data={\"case_id\", \"status\", \"run_id\", \"version\"}.\n`run_id`/`version` come straight from the Cases API start response\nunmodified and may be absent on a partial response. `run_id` is typed\n``int | str | None`` to match the sibling ``CancelAnalysisResponse`` —\nthe Cases API id type is not guaranteed numeric, so a string id must\nnot trip warn-only data_model validation in production.",
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Version"
+          }
+        },
+        "required": [
+          "case_id",
+          "status"
+        ],
+        "title": "RunAnalysisResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,
@@ -364,7 +689,9 @@
       "description": "Cancel the current analysis run for a case",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "cancel:analysis"
+      ],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -380,7 +707,37 @@
         "title": "CaseIdParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "cancel_analysis success envelope.\n\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"status\"}. `run_id`\nfalls back to the string \"?\" when the API omits it — hence ``int | str``.",
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "run_id",
+          "status"
+        ],
+        "title": "CancelAnalysisResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,
@@ -411,21 +768,29 @@
       "return_schema": {
         "$defs": {
           "GapReviewItem": {
-            "description": "One row from review_analysis_gaps.data[\"gaps\"][] / .data[\"by_severity\"][sev][].\n\nFields observed in handlers_analysis.py:122-145 — severity comes from\nCases API gap rows (BLOCKING/QUALITY/INFORMATIONAL); description is the\nfirst line of the gap's full description.",
+            "description": "One row from review_analysis_gaps.data[\"gaps\"][] / .data[\"by_severity\"][sev][].\n\nFields observed in handlers_analysis.py:122-145 — severity comes from\nCases API gap rows (BLOCKING/QUALITY/INFORMATIONAL); description is the\nfirst line of the gap's full description.\n\nSDL: a single analysis gap. Canonical id <- existing ``id``; title <-\n``description``. NOTE deliberately NOT mixing ``sdl.Prioritized``: its\n``severity`` is a fixed Literal['info','minor','major','critical'] that\nwould reject Sharelock's BLOCKING/QUALITY/INFORMATIONAL values — keeping\nthe existing free-string ``severity`` preserves back-compat.",
             "properties": {
               "id": {
                 "anyOf": [
                   {
-                    "type": "integer"
+                    "type": "string"
                   },
                   {
-                    "type": "null"
+                    "type": "integer"
                   }
                 ],
-                "default": null,
                 "title": "Id"
               },
-              "severity": {
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "gap",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -435,7 +800,7 @@
                   }
                 ],
                 "default": null,
-                "title": "Severity"
+                "title": "Subtitle"
               },
               "description": {
                 "anyOf": [
@@ -448,10 +813,51 @@
                 ],
                 "default": null,
                 "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Severity"
               }
             },
+            "required": [
+              "id",
+              "title"
+            ],
             "title": "GapReviewItem",
-            "type": "object"
+            "type": "object",
+            "x-sdl": "entity"
           }
         },
         "description": "Envelope returned by review_analysis_gaps — describes the full `data` dict.\n\nHandlers_analysis.py:152-161: full structure with case_id/run_id +\nflat gaps list + by_severity bucket dict + confidence_*.",
@@ -533,7 +939,9 @@
       "description": "Continue analysis despite flagged gaps",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "continue:analysis"
+      ],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -549,7 +957,40 @@
         "title": "CaseIdParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "Shared envelope for the two gap-decision write handlers.\n\ncontinue_analysis (decision=\"continue\") and resume_with_new_evidence\n(decision=\"add_evidence\") both return the same shape:\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"decision\"}.",
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "decision"
+        ],
+        "title": "GapDecisionResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,
@@ -561,7 +1002,9 @@
       "description": "Pause analysis so you can upload more evidence, then run again",
       "action_type": "write",
       "chain_callable": true,
-      "effects": [],
+      "effects": [
+        "pause:analysis"
+      ],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -577,7 +1020,40 @@
         "title": "CaseIdParams",
         "type": "object"
       },
-      "return_schema": {},
+      "return_schema": {
+        "description": "Shared envelope for the two gap-decision write handlers.\n\ncontinue_analysis (decision=\"continue\") and resume_with_new_evidence\n(decision=\"add_evidence\") both return the same shape:\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"decision\"}.",
+        "properties": {
+          "case_id": {
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "decision"
+        ],
+        "title": "GapDecisionResponse",
+        "type": "object"
+      },
       "event": "",
       "background": false,
       "long_running": false,

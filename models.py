@@ -156,3 +156,73 @@ class CaseChatResponse(BaseModel):
     for V23 compliance only; runtime path is the wrapper-LLM flow.
     """
     state: str
+
+
+# ── Write-handler envelopes (V24 data_model= targets) ──────────────────────────
+#
+# Federal V24 (SDK 5.0.1+): write/destructive @chat.function handlers SHOULD
+# declare data_model=. Each envelope describes the success `data` dict the
+# handler hands to ActionResult.success(data=...). Error paths return
+# ActionResult.error(...) with no data, so the envelope models the success
+# shape only (runtime data_model validation is warn-only). Plain BaseModel,
+# mirroring the read-side envelopes above (CaseListResponse, ...).
+
+
+class CreateCaseResponse(BaseModel):
+    """create_case success envelope. handlers.py: data={"case_id", "name"}.
+
+    `case_id` is the Cases API id (int); the handler falls back to the
+    string "?" only when the API omits an id — hence ``int | str``.
+    """
+    case_id: int | str
+    name: str
+
+
+class SyncCasesResponse(BaseModel):
+    """sync_cases success envelope.
+
+    handlers.py: data={"created", "skipped", "total_folders"} — `created`
+    and `skipped` are Nextcloud folder names; `total_folders` is the scan size.
+    """
+    created: list[str] = []
+    skipped: list[str] = []
+    total_folders: int = 0
+
+
+class RunAnalysisResponse(BaseModel):
+    """run_analysis success envelope.
+
+    handlers_analysis.py: data={"case_id", "status", "run_id", "version"}.
+    `run_id`/`version` come straight from the Cases API start response
+    unmodified and may be absent on a partial response. `run_id` is typed
+    ``int | str | None`` to match the sibling ``CancelAnalysisResponse`` —
+    the Cases API id type is not guaranteed numeric, so a string id must
+    not trip warn-only data_model validation in production.
+    """
+    case_id: int
+    status: str
+    run_id: int | str | None = None
+    version: int | str | None = None
+
+
+class CancelAnalysisResponse(BaseModel):
+    """cancel_analysis success envelope.
+
+    handlers_analysis.py: data={"case_id", "run_id", "status"}. `run_id`
+    falls back to the string "?" when the API omits it — hence ``int | str``.
+    """
+    case_id: int
+    run_id: int | str
+    status: str
+
+
+class GapDecisionResponse(BaseModel):
+    """Shared envelope for the two gap-decision write handlers.
+
+    continue_analysis (decision="continue") and resume_with_new_evidence
+    (decision="add_evidence") both return the same shape:
+    handlers_analysis.py: data={"case_id", "run_id", "decision"}.
+    """
+    case_id: int
+    run_id: int | str | None = None
+    decision: str

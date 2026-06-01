@@ -13,7 +13,10 @@ from app import chat, _user_id, _user_agency
 from imperal_sdk.chat import ActionResult
 import queries
 from queries import CasesAPIError
-from models import GapReviewResponse
+from models import (
+    GapReviewResponse,
+    RunAnalysisResponse, CancelAnalysisResponse, GapDecisionResponse,
+)
 
 log = logging.getLogger("sharelock-v2.handlers_analysis")
 
@@ -43,6 +46,8 @@ async def _latest_run_or_error(case_id: int, agency_id: str | None = None):
 
 
 @chat.function("run_analysis", action_type="write",
+               effects=["run:analysis"],
+               data_model=RunAnalysisResponse,
                description="Start deep forensic analysis on a case")
 async def fn_run_analysis(ctx, params: CaseIdParams) -> ActionResult:
     """Signal session workflow to start analysis. B2: handle 409 from Cases API."""
@@ -73,6 +78,8 @@ async def fn_run_analysis(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("cancel_analysis", action_type="write",
+               effects=["cancel:analysis"],
+               data_model=CancelAnalysisResponse,
                description="Cancel the current analysis run for a case")
 async def fn_cancel_analysis(ctx, params: CaseIdParams) -> ActionResult:
     """Cancel the latest active analysis run. B3. Uses imperal_id as actor."""
@@ -169,6 +176,8 @@ async def fn_review_analysis_gaps(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("continue_analysis", action_type="write",
+               effects=["continue:analysis"],
+               data_model=GapDecisionResponse,
                description="Continue analysis despite flagged gaps")
 async def fn_continue_analysis(ctx, params: CaseIdParams) -> ActionResult:
     """Signal decision=continue on the latest active run."""
@@ -194,6 +203,8 @@ async def fn_continue_analysis(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("resume_with_new_evidence", action_type="write",
+               effects=["pause:analysis"],
+               data_model=GapDecisionResponse,
                description="Pause analysis so you can upload more evidence, then run again")
 async def fn_resume_with_new_evidence(ctx, params: CaseIdParams) -> ActionResult:
     """Signal decision=add_evidence. Returns guidance for upload + rerun."""

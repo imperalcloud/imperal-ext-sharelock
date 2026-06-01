@@ -24,7 +24,10 @@ from case_resolver import resolve_case_id, load_case_data_from_api
 from cache_models import CaseSummary
 from files import create_backend
 from validation import validate_case_name, folder_exists, list_top_folders
-from models import CaseChatResponse, CaseListResponse, DocSearchResponse
+from models import (
+    CaseChatResponse, CaseListResponse, DocSearchResponse,
+    CreateCaseResponse, SyncCasesResponse,
+)
 
 log = logging.getLogger("sharelock-v2.handlers")
 
@@ -271,6 +274,8 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
 
 
 @chat.function("create_case", action_type="write",
+               effects=["create:case", "create:folder"],
+               data_model=CreateCaseResponse,
                description=(
                    "Create a new investigation case. CRITICAL: pass "
                    "user-supplied `name` and `description` VERBATIM in the "
@@ -321,6 +326,8 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
 
 
 @chat.function("sync_cases", action_type="write",
+               effects=["create:case"],
+               data_model=SyncCasesResponse,
                description="Sync cases from Nextcloud folders — create cases for new folders")
 async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
     """Scan Nextcloud for folders, create cases for any that don't exist yet."""
