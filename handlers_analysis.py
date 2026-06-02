@@ -158,11 +158,17 @@ async def fn_review_analysis_gaps(ctx, params: CaseIdParams) -> ActionResult:
         if not gaps:
             parts.append("\nNo gaps flagged. Analysis can continue.")
 
+        # SDL entity-list (NO legacy {gaps} wrapper): the flat gap list flows
+        # through data["items"]; each gap is a canonical SDL entity
+        # (id, title=description, kind="gap"). Conforms to
+        # sdl.EntityList[GapReviewItem] (x-sdl="entity-list"). The platform
+        # scalars + the severity-bucketed by_severity map are kept as additive
+        # fields on the EntityList subclass.
         return ActionResult.success(
             data={
+                "items": gaps,
                 "case_id": case_id,
                 "run_id": run_id,
-                "gaps": gaps,
                 "by_severity": by_severity,
                 "confidence_current": confidence_current,
                 "confidence_potential": confidence_potential,

@@ -385,8 +385,13 @@ async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
             a_st = c.get("analysis_status") or c.get("status") or "not run"
             lines.append(f"- **{c.get('name', '?')}** (ID: {c.get('id')}) — {a_st}")
         summary = "\n".join(lines) if lines else "No cases found."
+        # SDL entity-list (NO legacy {cases} wrapper): each case is a canonical
+        # SDL entity (id, title=name, kind="case"); the kernel reads
+        # data["items"] + title to resolve/fan out. Conforms to the
+        # sdl.EntityList[CaseRecord] contract (data_model carries
+        # x-sdl="entity-list"). ``count`` kept as an additive scalar.
         return ActionResult.success(
-            data={"cases": cases, "count": len(cases)},
+            data={"items": cases, "count": len(cases)},
             summary=summary,
         )
     except Exception as e:
@@ -435,15 +440,26 @@ async def fn_search_docs(ctx, params: SearchDocsParams) -> ActionResult:
                 json={"query": params.query},
             )
             if r.status_code == 404:
+                # SDL entity-list: empty result is items=[] (NO legacy {results}).
                 return ActionResult.success(
-                    data={"results": []},
+                    data={"items": [], "total": 0},
                     summary=f"No results found for '{params.query}' in case documents.",
                 )
             r.raise_for_status()
             results = r.json()
-        count = len(results) if isinstance(results, list) else results.get("count", 0)
+        # Cases API returns either a raw list OR {"count":..., "results":[...]}.
+        # Normalise into a real sdl.EntityList[DocSearchHit] shape: each hit is a
+        # canonical SDL entity (id=doc_id, title=snippet, kind="doc_hit"). NO legacy
+        # {results} wrapper — the kernel reads data["items"] (x-sdl="entity-list").
+        if isinstance(results, list):
+            hits = results
+        elif isinstance(results, dict):
+            hits = results.get("results") or results.get("items") or []
+        else:
+            hits = []
+        count = len(hits)
         return ActionResult.success(
-            data=results,
+            data={"items": hits, "total": count},
             summary=f"Found {count} result(s) for '{params.query}' in case documents.",
         )
     except Exception as e:

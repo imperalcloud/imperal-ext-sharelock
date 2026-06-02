@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.2.0",
+  "sdk_version": "5.2.1",
   "app_id": "sharelock-v2",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -67,18 +67,96 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "case_chat envelope — single `state` discriminator field.\n\nUsed as data_model= on the conversational catch-all handler. Note:\ncase_chat stays chain_callable=False (Task 5) because it consumes\nctx.history — typed dispatch drops history. data_model declaration is\nfor V23 compliance only; runtime path is the wrapper-LLM flow.",
+        "description": "case_chat result — a canonical SDL entity carrying the conversation\n``state`` discriminator (handlers.py: data={\"state\": <status|case_list|\nintelligence|intake>}). kind='case_chat'; canonical id/title <- state.\nKeeps the existing ``state`` field verbatim.",
         "properties": {
-          "state": {
-            "title": "State",
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
             "type": "string"
+          },
+          "kind": {
+            "default": "case_chat",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "State"
           }
         },
         "required": [
-          "state"
+          "id",
+          "title"
         ],
         "title": "CaseChatResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -117,30 +195,199 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "create_case success envelope. handlers.py: data={\"case_id\", \"name\"}.\n\n`case_id` is the Cases API id (int); the handler falls back to the\nstring \"?\" only when the API omits an id — hence ``int | str``.",
+        "description": "create_case receipt (handlers.py: data={\"case_id\", \"name\"}) — a canonical\nforensic-case entity (kind='case'). Canonical id <- ``case_id``; title <-\n``name``. ``case_id`` falls back to the string \"?\" when the API omits an id,\nhence the permissive type. Keeps both fields verbatim.",
         "properties": {
-          "case_id": {
+          "case_number": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
-                "type": "string"
+                "type": "null"
               }
             ],
+            "default": null,
+            "title": "Case Number",
+            "x-sdl-role": "sec.case_number"
+          },
+          "case_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Type",
+            "x-sdl-role": "sec.case_type"
+          },
+          "case_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Stage",
+            "x-sdl-role": "sec.case_stage"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Opened At",
+            "x-sdl-role": "sec.opened_at"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closed At",
+            "x-sdl-role": "sec.closed_at"
+          },
+          "case_resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Resolution",
+            "x-sdl-role": "sec.case_resolution"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Jurisdiction",
+            "x-sdl-role": "sec.jurisdiction"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "case",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "case_id": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
             "title": "Case Id"
           },
           "name": {
-            "title": "Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
           }
         },
         "required": [
-          "case_id",
-          "name"
+          "id",
+          "title"
         ],
         "title": "CreateCaseResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -164,8 +411,76 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "sync_cases success envelope.\n\nhandlers.py: data={\"created\", \"skipped\", \"total_folders\"} — `created`\nand `skipped` are Nextcloud folder names; `total_folders` is the scan size.",
+        "description": "sync_cases receipt (handlers.py: data={\"created\", \"skipped\",\n\"total_folders\"}) — a canonical SDL entity describing one sync run. ``created``\nand ``skipped`` are Nextcloud folder-name lists; ``total_folders`` is the scan\nsize. kind='case_sync'; canonical id/title summarise the run. All fields kept\nverbatim.",
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "case_sync",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
           "created": {
             "default": [],
             "items": {
@@ -183,13 +498,25 @@
             "type": "array"
           },
           "total_folders": {
-            "default": 0,
-            "title": "Total Folders",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Folders"
           }
         },
+        "required": [
+          "id",
+          "title"
+        ],
         "title": "SyncCasesResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -408,26 +735,56 @@
             "x-sdl": "entity"
           }
         },
-        "description": "Envelope returned by list_cases — describes the full `data` dict.\n\nHandlers.py:371-374: `data={\"cases\": cases, \"count\": len(cases)}`.",
+        "description": "list_cases return shape — a REAL sdl.EntityList[CaseRecord]\n(``items=[...]``, ``x-sdl='entity-list'``). The handler keeps the platform\nscalar ``count`` as an additive typed field (EntityList is a pydantic\nBaseModel, so additive fields are allowed). NO legacy ``{cases:[dict]}``\nwrapper — handler now returns ``data={\"items\": cases, \"count\": n}``.",
         "properties": {
-          "cases": {
+          "items": {
             "items": {
               "$ref": "#/$defs/CaseRecord"
             },
-            "title": "Cases",
+            "title": "Items",
             "type": "array"
           },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
           "count": {
+            "default": 0,
             "title": "Count",
             "type": "integer"
           }
         },
         "required": [
-          "cases",
-          "count"
+          "items"
         ],
         "title": "CaseListResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity-list"
       },
       "event": "",
       "background": false,
@@ -586,19 +943,51 @@
             "x-sdl": "entity"
           }
         },
-        "description": "Envelope returned by search_docs.\n\nHandlers.py:420-422 (404 path): `data={\"results\": []}`.\nHandlers.py:427-430 (success path): `data=results` (raw API response,\nmay be a list directly OR may be {\"count\":..., \"results\": [...]}).\nWe model the consistent shape `{\"results\": [...]}`. The success path\nwhere Cases API returns a raw list will round-trip without validation\nerror because Pydantic accepts the dict-or-list-as-data when data_model\nruntime validation is warn-only (5.0.1).",
+        "description": "search_docs return shape — a REAL sdl.EntityList[DocSearchHit]\n(``items=[...]``, ``x-sdl='entity-list'``). NO legacy ``{results:[dict]}``\nwrapper — the handler normalises the Cases API response (raw list OR\n``{results:[...]}``) into ``data={\"items\": [...], \"total\": n}``.",
         "properties": {
-          "results": {
-            "default": [],
+          "items": {
             "items": {
               "$ref": "#/$defs/DocSearchHit"
             },
-            "title": "Results",
+            "title": "Items",
             "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
           }
         },
+        "required": [
+          "items"
+        ],
         "title": "DocSearchResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity-list"
       },
       "event": "",
       "background": false,
@@ -630,15 +1019,87 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "run_analysis success envelope.\n\nhandlers_analysis.py: data={\"case_id\", \"status\", \"run_id\", \"version\"}.\n`run_id`/`version` come straight from the Cases API start response\nunmodified and may be absent on a partial response. `run_id` is typed\n``int | str | None`` to match the sibling ``CancelAnalysisResponse`` —\nthe Cases API id type is not guaranteed numeric, so a string id must\nnot trip warn-only data_model validation in production.",
+        "description": "run_analysis receipt (handlers_analysis.py: data={\"case_id\", \"status\",\n\"run_id\", \"version\"}) — a canonical SDL entity for one analysis run.\nCanonical id <- ``run_id`` (falling back to ``case_id``); title <- run label.\n``run_id``/``version`` come straight from the Cases API start response and may\nbe absent on a partial response. All fields kept verbatim.",
         "properties": {
-          "case_id": {
-            "title": "Case Id",
-            "type": "integer"
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "analysis_run",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
           },
           "run_id": {
             "anyOf": [
@@ -672,11 +1133,12 @@
           }
         },
         "required": [
-          "case_id",
-          "status"
+          "id",
+          "title"
         ],
         "title": "RunAnalysisResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -708,11 +1170,87 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "cancel_analysis success envelope.\n\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"status\"}. `run_id`\nfalls back to the string \"?\" when the API omits it — hence ``int | str``.",
+        "description": "cancel_analysis receipt (handlers_analysis.py: data={\"case_id\", \"run_id\",\n\"status\"}) — a canonical SDL entity. Canonical id <- ``run_id`` (falling back\nto ``case_id``); title <- run label. ``run_id`` falls back to the string \"?\"\nwhen the API omits it. All fields kept verbatim.",
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "analysis_run",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
           "case_id": {
-            "title": "Case Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
           },
           "run_id": {
             "anyOf": [
@@ -721,22 +1259,22 @@
               },
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
+            "default": null,
             "title": "Run Id"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
           }
         },
         "required": [
-          "case_id",
-          "run_id",
-          "status"
+          "id",
+          "title"
         ],
         "title": "CancelAnalysisResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -768,7 +1306,7 @@
       "return_schema": {
         "$defs": {
           "GapReviewItem": {
-            "description": "One row from review_analysis_gaps.data[\"gaps\"][] / .data[\"by_severity\"][sev][].\n\nFields observed in handlers_analysis.py:122-145 — severity comes from\nCases API gap rows (BLOCKING/QUALITY/INFORMATIONAL); description is the\nfirst line of the gap's full description.\n\nSDL: a single analysis gap. Canonical id <- existing ``id``; title <-\n``description``. NOTE deliberately NOT mixing ``sdl.Prioritized``: its\n``severity`` is a fixed Literal['info','minor','major','critical'] that\nwould reject Sharelock's BLOCKING/QUALITY/INFORMATIONAL values — keeping\nthe existing free-string ``severity`` preserves back-compat.",
+            "description": "One row from review_analysis_gaps — the flat gaps list and the\nseverity-bucketed ``by_severity`` map both carry these items.\n\nFields observed in handlers_analysis.py — severity comes from Cases API gap\nrows (BLOCKING/QUALITY/INFORMATIONAL); description is the first line of the\ngap's full description.\n\nSDL: a single analysis gap. Canonical id <- existing ``id``; title <-\n``description``. NOTE deliberately NOT mixing ``sdl.Prioritized``: its\n``severity`` is a fixed Literal['info','minor','major','critical'] that\nwould reject Sharelock's BLOCKING/QUALITY/INFORMATIONAL values — keeping\nthe existing free-string ``severity`` preserves back-compat.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -860,13 +1398,16 @@
             "x-sdl": "entity"
           }
         },
-        "description": "Envelope returned by review_analysis_gaps — describes the full `data` dict.\n\nHandlers_analysis.py:152-161: full structure with case_id/run_id +\nflat gaps list + by_severity bucket dict + confidence_*.",
+        "description": "review_analysis_gaps return shape — a REAL sdl.EntityList[GapReviewItem]\n(the flat gap list flows through ``items``). The handler keeps the platform\nscalars ``case_id``/``run_id``/``confidence_*`` and the severity-bucketed\n``by_severity`` map as additive typed fields below (EntityList is a pydantic\nBaseModel). NO legacy ``{gaps:[dict]}`` wrapper — handler now returns\n``data={\"items\": gaps, \"case_id\": ..., \"by_severity\": {...}, ...}``.",
         "properties": {
-          "case_id": {
-            "title": "Case Id",
-            "type": "integer"
+          "items": {
+            "items": {
+              "$ref": "#/$defs/GapReviewItem"
+            },
+            "title": "Items",
+            "type": "array"
           },
-          "run_id": {
+          "total": {
             "anyOf": [
               {
                 "type": "integer"
@@ -876,15 +1417,44 @@
               }
             ],
             "default": null,
-            "title": "Run Id"
+            "title": "Total"
           },
-          "gaps": {
-            "default": [],
-            "items": {
-              "$ref": "#/$defs/GapReviewItem"
-            },
-            "title": "Gaps",
-            "type": "array"
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "case_id": {
+            "default": 0,
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
           },
           "by_severity": {
             "additionalProperties": {
@@ -923,10 +1493,11 @@
           }
         },
         "required": [
-          "case_id"
+          "items"
         ],
         "title": "GapReviewResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity-list"
       },
       "event": "",
       "background": false,
@@ -958,11 +1529,87 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Shared envelope for the two gap-decision write handlers.\n\ncontinue_analysis (decision=\"continue\") and resume_with_new_evidence\n(decision=\"add_evidence\") both return the same shape:\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"decision\"}.",
+        "description": "Shared receipt for the two gap-decision write handlers — continue_analysis\n(decision=\"continue\") and resume_with_new_evidence (decision=\"add_evidence\")\nboth return data={\"case_id\", \"run_id\", \"decision\"}. A canonical SDL entity;\ncanonical id <- ``run_id`` (falling back to ``case_id``); title <- decision\nlabel. All fields kept verbatim.",
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "analysis_run",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
           "case_id": {
-            "title": "Case Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
           },
           "run_id": {
             "anyOf": [
@@ -980,16 +1627,25 @@
             "title": "Run Id"
           },
           "decision": {
-            "title": "Decision",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Decision"
           }
         },
         "required": [
-          "case_id",
-          "decision"
+          "id",
+          "title"
         ],
         "title": "GapDecisionResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -1021,11 +1677,87 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Shared envelope for the two gap-decision write handlers.\n\ncontinue_analysis (decision=\"continue\") and resume_with_new_evidence\n(decision=\"add_evidence\") both return the same shape:\nhandlers_analysis.py: data={\"case_id\", \"run_id\", \"decision\"}.",
+        "description": "Shared receipt for the two gap-decision write handlers — continue_analysis\n(decision=\"continue\") and resume_with_new_evidence (decision=\"add_evidence\")\nboth return data={\"case_id\", \"run_id\", \"decision\"}. A canonical SDL entity;\ncanonical id <- ``run_id`` (falling back to ``case_id``); title <- decision\nlabel. All fields kept verbatim.",
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "analysis_run",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
           "case_id": {
-            "title": "Case Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
           },
           "run_id": {
             "anyOf": [
@@ -1043,16 +1775,25 @@
             "title": "Run Id"
           },
           "decision": {
-            "title": "Decision",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Decision"
           }
         },
         "required": [
-          "case_id",
-          "decision"
+          "id",
+          "title"
         ],
         "title": "GapDecisionResponse",
-        "type": "object"
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,

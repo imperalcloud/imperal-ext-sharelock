@@ -1,17 +1,26 @@
-"""Sharelock-v2 — Pydantic return models for read handlers.
+"""Sharelock-v2 — SDL return models for chat handlers (100% SDL).
 
-Federal V23 contract (SDK 5.0.1+): every @chat.function(action_type="read", ...)
-MUST declare data_model=. Each *Response envelope describes the FULL `data` dict
-returned by the handler — per the working precedent in imperal-ext-admin
-(handlers_users.py:61 → models_records.py UserListResponse).
+Federal V23/V24 (SDK 5.0.1+): every @chat.function data tool declares
+``data_model=``. SDL doctrine (CLAUDE.md Rule 13): ТОЛЬКО SDL, ноль legacy —
+single-entity / write-receipt returns are real ``sdl.Entity`` subclasses; LIST
+returns are real ``sdl.EntityList[T]`` (``items=[...]``, ``x-sdl='entity-list'``),
+NOT legacy ``{key:[dict]}`` BaseModel wrappers.
 
-Per-row types (CaseRecord, DocSearchHit, GapReviewItem) are nested under
-the envelopes, mirroring admin's pattern (UserBalanceRecord nested in
-UserBalancesResponse).
+Federal I-EXT-RECORD-FIELD-NAMING-SYMMETRIC: every field name mirrors the ACTUAL
+runtime dict key the handler hands to ``ActionResult.success(data=...)`` (verified
+against handlers.py / handlers_analysis.py). Canonical ``id``/``title``/``kind``
+are derived from those existing fields via a ``mode="before"`` validator so every
+construction site (raw Cases API dicts) keeps working unchanged.
+
+Per-row types (CaseRecord, DocSearchHit, GapReviewItem) are the ``sdl.EntityList``
+item types — reused directly as the list-item entities, mirroring admin's pattern
+(UserRecord nested in UserListResponse).
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, model_validator
+from typing import Any, Optional
+
+from pydantic import model_validator
 
 from imperal_sdk import sdl
 
@@ -80,149 +89,128 @@ class DocSearchHit(sdl.Entity):
         return data
 
 
-class GapReviewItem(sdl.Entity):
-    """One row from review_analysis_gaps.data["gaps"][] / .data["by_severity"][sev][].
+# ── List responses (real sdl.EntityList[T] — NO legacy {key:[dict]} wrappers) ───
 
-    Fields observed in handlers_analysis.py:122-145 — severity comes from
-    Cases API gap rows (BLOCKING/QUALITY/INFORMATIONAL); description is the
-    first line of the gap's full description.
 
-    SDL: a single analysis gap. Canonical id <- existing ``id``; title <-
-    ``description``. NOTE deliberately NOT mixing ``sdl.Prioritized``: its
-    ``severity`` is a fixed Literal['info','minor','major','critical'] that
-    would reject Sharelock's BLOCKING/QUALITY/INFORMATIONAL values — keeping
-    the existing free-string ``severity`` preserves back-compat.
+class CaseListResponse(sdl.EntityList[CaseRecord]):
+    """list_cases return shape — a REAL sdl.EntityList[CaseRecord]
+    (``items=[...]``, ``x-sdl='entity-list'``). The handler keeps the platform
+    scalar ``count`` as an additive typed field (EntityList is a pydantic
+    BaseModel, so additive fields are allowed). NO legacy ``{cases:[dict]}``
+    wrapper — handler now returns ``data={"items": cases, "count": n}``.
     """
-    kind: str = "gap"
-    # --- existing fields kept verbatim ---
-    severity: str | None = None
-    description: str | None = None
+    count: int = 0
+
+
+class DocSearchResponse(sdl.EntityList[DocSearchHit]):
+    """search_docs return shape — a REAL sdl.EntityList[DocSearchHit]
+    (``items=[...]``, ``x-sdl='entity-list'``). NO legacy ``{results:[dict]}``
+    wrapper — the handler normalises the Cases API response (raw list OR
+    ``{results:[...]}``) into ``data={"items": [...], "total": n}``.
+    """
+    pass
+
+
+# ── Single-entity / write-receipt responses (real sdl.Entity subclasses) ────────
+#
+# Federal V23/V24: each receipt is a canonical SDL entity whose field names mirror
+# the handler's real ``data`` dict keys (I-EXT-RECORD-FIELD-NAMING-SYMMETRIC). The
+# canonical id/title/kind are derived from those existing keys via _sdl_canon. Error
+# paths return ActionResult.error(...) with no data, so the entity models the
+# success shape only.
+
+
+class CaseChatResponse(sdl.Entity):
+    """case_chat result — a canonical SDL entity carrying the conversation
+    ``state`` discriminator (handlers.py: data={"state": <status|case_list|
+    intelligence|intake>}). kind='case_chat'; canonical id/title <- state.
+    Keeps the existing ``state`` field verbatim.
+    """
+    kind: str = "case_chat"
+    state: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
     def _sdl_canon(cls, data):
         if isinstance(data, dict):
-            data.setdefault("id", data.get("id") or "")
-            data.setdefault("title", data.get("description") or "")
+            data["id"] = data.get("state") or data.get("id") or "case_chat"
+            data.setdefault("title", data.get("state") or "case_chat")
+            data.setdefault("kind", "case_chat")
         return data
 
 
-# ── Envelopes (the actual data_model= targets) ─────────────────────────────────
-
-
-class CaseListResponse(BaseModel):
-    """Envelope returned by list_cases — describes the full `data` dict.
-
-    Handlers.py:371-374: `data={"cases": cases, "count": len(cases)}`.
+class CreateCaseResponse(sdl.Entity, sdl.Caseable):
+    """create_case receipt (handlers.py: data={"case_id", "name"}) — a canonical
+    forensic-case entity (kind='case'). Canonical id <- ``case_id``; title <-
+    ``name``. ``case_id`` falls back to the string "?" when the API omits an id,
+    hence the permissive type. Keeps both fields verbatim.
     """
-    cases: list[CaseRecord]
-    count: int
+    kind: str = "case"
+    case_id: Optional[Any] = None
+    name: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sdl_canon(cls, data):
+        if isinstance(data, dict):
+            data["id"] = data.get("case_id") or data.get("id") or ""
+            data.setdefault("title", data.get("name") or data.get("case_id") or "")
+            data.setdefault("kind", "case")
+        return data
 
 
-class DocSearchResponse(BaseModel):
-    """Envelope returned by search_docs.
-
-    Handlers.py:420-422 (404 path): `data={"results": []}`.
-    Handlers.py:427-430 (success path): `data=results` (raw API response,
-    may be a list directly OR may be {"count":..., "results": [...]}).
-    We model the consistent shape `{"results": [...]}`. The success path
-    where Cases API returns a raw list will round-trip without validation
-    error because Pydantic accepts the dict-or-list-as-data when data_model
-    runtime validation is warn-only (5.0.1).
+class SyncCasesResponse(sdl.Entity):
+    """sync_cases receipt (handlers.py: data={"created", "skipped",
+    "total_folders"}) — a canonical SDL entity describing one sync run. ``created``
+    and ``skipped`` are Nextcloud folder-name lists; ``total_folders`` is the scan
+    size. kind='case_sync'; canonical id/title summarise the run. All fields kept
+    verbatim.
     """
-    results: list[DocSearchHit] = []
-
-
-class GapReviewResponse(BaseModel):
-    """Envelope returned by review_analysis_gaps — describes the full `data` dict.
-
-    Handlers_analysis.py:152-161: full structure with case_id/run_id +
-    flat gaps list + by_severity bucket dict + confidence_*.
-    """
-    case_id: int
-    run_id: int | None = None
-    gaps: list[GapReviewItem] = []
-    by_severity: dict[str, list[GapReviewItem]] = {}
-    confidence_current: float | None = None
-    confidence_potential: float | None = None
-
-
-class CaseChatResponse(BaseModel):
-    """case_chat envelope — single `state` discriminator field.
-
-    Used as data_model= on the conversational catch-all handler. Note:
-    case_chat stays chain_callable=False (Task 5) because it consumes
-    ctx.history — typed dispatch drops history. data_model declaration is
-    for V23 compliance only; runtime path is the wrapper-LLM flow.
-    """
-    state: str
-
-
-# ── Write-handler envelopes (V24 data_model= targets) ──────────────────────────
-#
-# Federal V24 (SDK 5.0.1+): write/destructive @chat.function handlers SHOULD
-# declare data_model=. Each envelope describes the success `data` dict the
-# handler hands to ActionResult.success(data=...). Error paths return
-# ActionResult.error(...) with no data, so the envelope models the success
-# shape only (runtime data_model validation is warn-only). Plain BaseModel,
-# mirroring the read-side envelopes above (CaseListResponse, ...).
-
-
-class CreateCaseResponse(BaseModel):
-    """create_case success envelope. handlers.py: data={"case_id", "name"}.
-
-    `case_id` is the Cases API id (int); the handler falls back to the
-    string "?" only when the API omits an id — hence ``int | str``.
-    """
-    case_id: int | str
-    name: str
-
-
-class SyncCasesResponse(BaseModel):
-    """sync_cases success envelope.
-
-    handlers.py: data={"created", "skipped", "total_folders"} — `created`
-    and `skipped` are Nextcloud folder names; `total_folders` is the scan size.
-    """
+    kind: str = "case_sync"
     created: list[str] = []
     skipped: list[str] = []
-    total_folders: int = 0
+    total_folders: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sdl_canon(cls, data):
+        if isinstance(data, dict):
+            _created = data.get("created") or []
+            data["id"] = data.get("id") or "case_sync"
+            data.setdefault(
+                "title",
+                f"Synced {len(_created)} case(s) from "
+                f"{data.get('total_folders', 0)} folder(s)",
+            )
+            data.setdefault("kind", "case_sync")
+        return data
 
 
-class RunAnalysisResponse(BaseModel):
-    """run_analysis success envelope.
+# ── Analysis-domain models (re-exported so existing imports keep working) ───────
+#
+# Split into models_analysis.py to keep both modules under the 300-LOC ceiling
+# (CLAUDE.md Rule 6). Importers (handlers_analysis.py) still do
+# ``from models import GapReviewResponse, RunAnalysisResponse, ...`` unchanged.
 
-    handlers_analysis.py: data={"case_id", "status", "run_id", "version"}.
-    `run_id`/`version` come straight from the Cases API start response
-    unmodified and may be absent on a partial response. `run_id` is typed
-    ``int | str | None`` to match the sibling ``CancelAnalysisResponse`` —
-    the Cases API id type is not guaranteed numeric, so a string id must
-    not trip warn-only data_model validation in production.
-    """
-    case_id: int
-    status: str
-    run_id: int | str | None = None
-    version: int | str | None = None
+from models_analysis import (  # noqa: E402, F401
+    GapReviewItem,
+    GapReviewResponse,
+    RunAnalysisResponse,
+    CancelAnalysisResponse,
+    GapDecisionResponse,
+)
 
-
-class CancelAnalysisResponse(BaseModel):
-    """cancel_analysis success envelope.
-
-    handlers_analysis.py: data={"case_id", "run_id", "status"}. `run_id`
-    falls back to the string "?" when the API omits it — hence ``int | str``.
-    """
-    case_id: int
-    run_id: int | str
-    status: str
-
-
-class GapDecisionResponse(BaseModel):
-    """Shared envelope for the two gap-decision write handlers.
-
-    continue_analysis (decision="continue") and resume_with_new_evidence
-    (decision="add_evidence") both return the same shape:
-    handlers_analysis.py: data={"case_id", "run_id", "decision"}.
-    """
-    case_id: int
-    run_id: int | str | None = None
-    decision: str
+__all__ = [
+    "CaseRecord",
+    "DocSearchHit",
+    "GapReviewItem",
+    "CaseListResponse",
+    "DocSearchResponse",
+    "GapReviewResponse",
+    "CaseChatResponse",
+    "CreateCaseResponse",
+    "SyncCasesResponse",
+    "RunAnalysisResponse",
+    "CancelAnalysisResponse",
+    "GapDecisionResponse",
+]
