@@ -24,21 +24,21 @@ def test_case_record_fields_match_params_symmetry():
 
 
 def test_case_list_envelope_contains_case_rows():
-    """CaseListResponse.cases is typed list[CaseRecord]."""
+    """CaseListResponse is a real sdl.EntityList[CaseRecord] — rows live in items=[...]; count kept as an additive scalar (SDL migration 2026-06-02, no legacy {cases:[dict]} wrapper)."""
     from models import CaseListResponse, CaseRecord
     fields = CaseListResponse.model_fields
-    assert "cases" in fields
+    assert "items" in fields
     assert "count" in fields
-    # Verify the list element type is CaseRecord
-    assert fields["cases"].annotation == list[CaseRecord], (
-        f"CaseListResponse.cases must be list[CaseRecord], got {fields['cases'].annotation}"
+    # Verify the list element type is CaseRecord (EntityList[CaseRecord])
+    assert fields["items"].annotation == list[CaseRecord], (
+        f"CaseListResponse.items must be list[CaseRecord], got {fields['items'].annotation}"
     )
 
 
 def test_gap_review_envelope_shape():
-    """GapReviewResponse mirrors handlers_analysis.py:152-161 data dict."""
+    """GapReviewResponse is a real sdl.EntityList[GapReviewItem] — gap rows live in items=[...]; the handler's scalars (case_id/run_id/by_severity/confidence_*) are kept as additive typed fields (SDL migration 2026-06-02; legacy 'gaps' list is now 'items')."""
     from models import GapReviewResponse
-    required = {"case_id", "run_id", "gaps", "by_severity",
+    required = {"case_id", "run_id", "items", "by_severity",
                 "confidence_current", "confidence_potential"}
     fields = set(GapReviewResponse.model_fields.keys())
     assert required.issubset(fields), f"GapReviewResponse missing fields {required - fields}"
