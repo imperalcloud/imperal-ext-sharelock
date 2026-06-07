@@ -2,8 +2,6 @@ import pytest
 import intelligence_context as ic
 import skeleton as sk
 from imperal_sdk.testing import MockContext
-from imperal_sdk.types.identity import UserContext
-
 
 @pytest.mark.asyncio
 async def test_fetch_grounded_context_threads_agency_id(monkeypatch):
@@ -61,3 +59,4 @@ async def test_skeleton_refresh_threads_agency_id(monkeypatch):
 
     assert seen, "no queries called"
     assert all(a == "acme" for a in seen), f"un-scoped skeleton reads: {seen}"
+    assert len(seen) == 4, f"expected 4 agency-scoped skeleton reads (get_cases + get_analysis + 2x get_files), got {len(seen)}: {seen}"
