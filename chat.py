@@ -118,23 +118,15 @@ def resolve_state(case_id: int | None, analysis_status: str | None) -> str:
 
 async def run_intake(message: str, history: list, case_data: dict, case_id: int, ctx,
                      resolution_note: str | None = None) -> str:
-    """INTAKE state: help prepare case, DOJ guidance. Uses LLM provider."""
+    """INTAKE state: help prepare case, DOJ guidance. Uses ctx.ai (Opus 4.8)."""
     system = _load_prompt("intake") + f"\n\nCASE CONTEXT:\n{_build_case_context(case_data, case_id)}"
     if resolution_note:
         system = resolution_note + "\n\n" + system
-    messages = [{"role": h["role"], "content": h["content"]} for h in history[-10:]]
-    messages.append({"role": "user", "content": message})
-
+    convo = "\n".join(f"{h['role'].upper()}: {h['content']}" for h in history[-10:])
+    prompt = system + ("\n\n" + convo if convo else "") + f"\nUSER: {message}\nASSISTANT:"
     try:
-        resp = await _get_llm().create_message(
-            messages=messages,
-            system=system,
-            max_tokens=1024,
-            purpose="execution",
-            extension_id="sharelock-v2",
-            user_id=str(ctx.user.imperal_id),
-        )
-        return next((b.text for b in resp.content if hasattr(b, "text")), "I processed your request.")
+        result = await ctx.ai.complete(prompt, model=_QA_MODEL, max_tokens=1024)
+        return _text_of(result) or "I processed your request."
     except Exception as e:
         log.error(f"INTAKE LLM error: {e}")
         return "I encountered an error processing your request. Please try again."
