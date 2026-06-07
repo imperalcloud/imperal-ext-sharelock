@@ -21,7 +21,7 @@ _INSPECTIONS_PAGE = 1000
 _INSPECTIONS_HARD_LIMIT = 5000  # safety bound for very large cases
 
 
-async def _fetch_inspection_counts(case_id: int) -> dict:
+async def _fetch_inspection_counts(case_id: int, agency_id: str | None = None) -> dict:
     """Aggregate per-category inspection counts.
 
     Returns dict keyed by "category/subcategory" (or "category" when subcategory
@@ -44,7 +44,7 @@ async def _fetch_inspection_counts(case_id: int) -> dict:
     try:
         while offset < _INSPECTIONS_HARD_LIMIT:
             page = await queries.list_inspections(
-                case_id, limit=_INSPECTIONS_PAGE, offset=offset,
+                case_id, limit=_INSPECTIONS_PAGE, offset=offset, agency_id=agency_id,
             )
             if not isinstance(page, list):
                 break
@@ -100,14 +100,14 @@ async def _fetch_inspection_counts(case_id: int) -> dict:
     return result
 
 
-async def fetch_grounded_context(case_id: int) -> dict:
+async def fetch_grounded_context(case_id: int, agency_id: str | None = None) -> dict:
     """Fetch V3 grounded data from Cases API in parallel.
 
     Returns dict with all artifacts for the latest completed run.
     On error: returns {"error": "<message>"}.
     """
     try:
-        case = await queries.get_case(case_id)
+        case = await queries.get_case(case_id, agency_id=agency_id)
     except Exception as e:
         log.error(f"get_case({case_id}) failed: {e}")
         return {"error": f"Failed to load case: {e}"}
@@ -120,21 +120,21 @@ async def fetch_grounded_context(case_id: int) -> dict:
         return {"error": "No analysis run available for this case"}
 
     try:
-        run = await queries.get_run(case_id, run_id)
+        run = await queries.get_run(case_id, run_id, agency_id=agency_id)
     except Exception as e:
         log.error(f"get_run({case_id}, {run_id}) failed: {e}")
         run = {"run_id": run_id}
 
     (gaps, summaries, entities, graph, taxonomy, audit, runs_history,
      inspections) = await asyncio.gather(
-        queries.list_gaps(case_id, run_id),
-        queries.list_summaries(case_id, run_id),
-        queries.list_entities(case_id, limit=_MAX_ENTITIES),
-        queries.get_graph(case_id, max_nodes=30, min_mentions=2),
-        queries.get_taxonomy(case_id),
-        queries.get_audit_log(case_id, limit=_MAX_AUDIT_EVENTS),
-        queries.list_runs(case_id),
-        _fetch_inspection_counts(case_id),
+        queries.list_gaps(case_id, run_id, agency_id=agency_id),
+        queries.list_summaries(case_id, run_id, agency_id=agency_id),
+        queries.list_entities(case_id, limit=_MAX_ENTITIES, agency_id=agency_id),
+        queries.get_graph(case_id, max_nodes=30, min_mentions=2, agency_id=agency_id),
+        queries.get_taxonomy(case_id, agency_id=agency_id),
+        queries.get_audit_log(case_id, limit=_MAX_AUDIT_EVENTS, agency_id=agency_id),
+        queries.list_runs(case_id, agency_id=agency_id),
+        _fetch_inspection_counts(case_id, agency_id=agency_id),
         return_exceptions=True,
     )
 
@@ -172,7 +172,7 @@ async def fetch_grounded_context(case_id: int) -> dict:
             prev_rid = int(prev.get("run_id"))
             if not summaries_safe and carried_summaries_run is None:
                 try:
-                    s = await queries.list_summaries(case_id, prev_rid)
+                    s = await queries.list_summaries(case_id, prev_rid, agency_id=agency_id)
                     if s:
                         summaries_safe = s
                         carried_summaries_run = prev_rid
@@ -180,7 +180,7 @@ async def fetch_grounded_context(case_id: int) -> dict:
                     log.debug(f"carry-forward summaries from run {prev_rid} failed: {e}")
             if not gaps_safe and carried_gaps_run is None:
                 try:
-                    g = await queries.list_gaps(case_id, prev_rid)
+                    g = await queries.list_gaps(case_id, prev_rid, agency_id=agency_id)
                     if g:
                         gaps_safe = g
                         carried_gaps_run = prev_rid
