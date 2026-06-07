@@ -53,7 +53,7 @@ async def _fetch_inspection_counts(case_id: int, agency_id: str | None = None) -
                 break
             offset += _INSPECTIONS_PAGE
     except Exception as e:
-        log.error(f"_fetch_inspection_counts({case_id}) failed: {e}")
+        log.error(f"_fetch_inspection_counts(case_id={case_id}, agency_id={agency_id!r}) failed: {e}")
         return {"__ERROR__": str(e)}
 
     buckets: dict[str, dict] = defaultdict(lambda: {

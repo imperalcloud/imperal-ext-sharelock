@@ -21,7 +21,9 @@ async def test_fetch_grounded_context_threads_agency_id(monkeypatch):
     monkeypatch.setattr(ic.queries, "get_graph", _spy("get_graph", {}))
     monkeypatch.setattr(ic.queries, "get_taxonomy", _spy("get_taxonomy", []))
     monkeypatch.setattr(ic.queries, "get_audit_log", _spy("get_audit_log", []))
-    monkeypatch.setattr(ic.queries, "list_runs", _spy("list_runs", []))
+    monkeypatch.setattr(ic.queries, "list_runs", _spy("list_runs", [
+        {"run_id": 21499, "status": "completed"},
+    ]))
     monkeypatch.setattr(ic.queries, "list_inspections", _spy("list_inspections", []))
 
     await ic.fetch_grounded_context(3812, agency_id="acme")
