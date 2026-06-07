@@ -377,6 +377,5 @@ __all__ = [
     "build_intelligence_tool_schema",
     "parse_intelligence_response",
     "build_intelligence_json_instruction",
-    "_strip_code_fence",
     "parse_intelligence_json",
 ]

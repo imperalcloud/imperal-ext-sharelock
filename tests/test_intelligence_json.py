@@ -19,6 +19,7 @@ def test_parse_fenced_json():
 def test_parse_garbage_returns_none():
     assert parse_intelligence_json("I cannot help with that.") is None
     assert parse_intelligence_json("") is None
+    assert parse_intelligence_json(None) is None
 
 
 def test_json_instruction_mentions_fields():
