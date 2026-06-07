@@ -27,6 +27,7 @@ Source families mirror intelligence_tag_resolver.resolve_tag():
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -319,6 +320,55 @@ def parse_intelligence_response(args: Any) -> IntelligenceResponse | None:
     )
 
 
+def build_intelligence_json_instruction() -> str:
+    """Instruction telling the model to emit the IntelligenceResponse as JSON.
+
+    Replaces the forced tool-call protocol (text-completion path via ctx.ai).
+    """
+    return (
+        "RESPONSE FORMAT — JSON ONLY:\n"
+        "Output a SINGLE JSON object and NOTHING else (no prose outside JSON, no markdown):\n"
+        '{\n'
+        '  "prose": "<answer in the user\'s language; clean — no citation tags, no self-introduction>",\n'
+        '  "claims": [{"text": "<fact>", "sources": [{"family": "I", "qual1": null, "num": "2", '
+        '"subtype": "T", "subnum": "1", "qual2": null}]}],\n'
+        '  "confidence": "HIGH|MEDIUM|LOW|UNKNOWN",\n'
+        '  "unknown_fields": ["<fields asked-about but absent from CASE CONTEXT>"]\n'
+        '}\n'
+        "Source families: CASE, RUN, TAX, INS, GRAPH, G, S, CC, I, E, A. "
+        "I num=2 subtype=T subnum=1 -> indictment target 1; S num=1 subtype=F subnum=1 -> finding 1 of summary 1.\n"
+        "If CASE CONTEXT contains the answer you MUST surface it in `prose`. "
+        "Use confidence=UNKNOWN ONLY for facts genuinely absent from CASE CONTEXT — never as a default."
+    )
+
+
+def _strip_code_fence(text: str) -> str:
+    t = text.strip()
+    if t.startswith("```"):
+        lines = t.split("\n")
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        t = "\n".join(lines).strip()
+    return t
+
+
+def parse_intelligence_json(text: str) -> "IntelligenceResponse | None":
+    """Parse a JSON completion string into IntelligenceResponse.
+
+    Reuses parse_intelligence_response for the dict->dataclass mapping.
+    Returns None if the text is not JSON or has no usable prose.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return None
+    try:
+        obj = json.loads(_strip_code_fence(text))
+    except (ValueError, TypeError):
+        return None
+    return parse_intelligence_response(obj)
+
+
 __all__ = [
     "_TOOL_NAME",
     "CitationSource",
@@ -326,4 +376,7 @@ __all__ = [
     "IntelligenceResponse",
     "build_intelligence_tool_schema",
     "parse_intelligence_response",
+    "build_intelligence_json_instruction",
+    "_strip_code_fence",
+    "parse_intelligence_json",
 ]
