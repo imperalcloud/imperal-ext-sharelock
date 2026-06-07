@@ -292,7 +292,7 @@ def parse_intelligence_response(args: Any) -> IntelligenceResponse | None:
     if not isinstance(args, dict):
         return None
     prose = args.get("prose")
-    if not isinstance(prose, str):
+    if not isinstance(prose, str) or not prose.strip():
         return None
 
     raw_claims = args.get("claims") or []

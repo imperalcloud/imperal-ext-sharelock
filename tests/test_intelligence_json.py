@@ -22,6 +22,12 @@ def test_parse_garbage_returns_none():
     assert parse_intelligence_json(None) is None
 
 
+def test_parse_blank_prose_returns_none():
+    import json as _json
+    assert parse_intelligence_json(_json.dumps({"prose": "", "claims": [], "confidence": "UNKNOWN", "unknown_fields": []})) is None
+    assert parse_intelligence_json(_json.dumps({"prose": "   ", "claims": [], "confidence": "UNKNOWN", "unknown_fields": []})) is None
+
+
 def test_json_instruction_mentions_fields():
     instr = build_intelligence_json_instruction()
     for f in ("prose", "claims", "confidence", "unknown_fields"):

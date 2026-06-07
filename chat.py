@@ -198,14 +198,6 @@ async def run_intelligence(message: str, history: list,
     except Exception as e:
         log.debug(f"ctx.cache fingerprint read failed (non-fatal): {e}")
 
-    # Federal-grade discipline: factual Q&A on grounded CASE CONTEXT does
-    # NOT need chat history. The CASE CONTEXT system block has the data,
-    # and case_resolver has already pinned case_id from message anaphora.
-    # Empty history prevents the LLM from re-batching prior unanswered
-    # questions into a numbered list (the "Ответ на ваши вопросы 1/2/3"
-    # pattern that surfaced when assistant turns were stripped but user
-    # turns kept).
-    history_for_llm: list = []
     if prior_fp and prior_fp != current_fp:
         log.info(
             f"INTELLIGENCE case={case_id} context changed "

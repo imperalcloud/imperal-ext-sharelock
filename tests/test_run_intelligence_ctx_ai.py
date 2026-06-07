@@ -53,3 +53,17 @@ async def test_run_intelligence_falls_back_to_deterministic_on_garbage(monkeypat
     out = await chat_engine.run_intelligence("кто забуровил?", [], _CTX_DATA["case"], 3812, ctx)
     assert "Nicholas Mitchell" in out          # deterministic fallback surfaced the indictment
     assert "cannot help" not in out
+
+
+@pytest.mark.asyncio
+async def test_run_intelligence_falls_back_on_empty_prose(monkeypatch):
+    import json
+    async def _fake_fetch(case_id, agency_id=None):
+        return dict(_CTX_DATA)
+    monkeypatch.setattr(chat_engine, "fetch_grounded_context", _fake_fetch)
+    ctx = _ctx_acme()
+    # valid JSON but empty prose -> must NOT dead-end; deterministic fallback fires
+    ctx.ai.set_response("CASE CONTEXT", json.dumps({"prose": "", "claims": [], "confidence": "UNKNOWN", "unknown_fields": []}))
+    out = await chat_engine.run_intelligence("кто забуровил?", [], _CTX_DATA["case"], 3812, ctx)
+    assert out.strip() != ""
+    assert "Nicholas Mitchell" in out
