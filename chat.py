@@ -29,7 +29,7 @@ SDK v1.6.0 / I-SKELETON-LLM-ONLY: the Layer 3 fingerprint is stored in
 import logging
 import os
 
-from app import _get_llm, _user_email, _user_agency
+from app import _user_email, _user_agency
 from cache_models import CaseContextFingerprint
 from intelligence_context import fetch_grounded_context
 from intelligence_format import format_grounded_context, render_findings_deterministic

@@ -16,7 +16,7 @@ log = logging.getLogger("sharelock-v2")
 
 ext = Extension(
     "sharelock-v2",
-    version="3.4.0",
+    version="3.5.0",
     capabilities=[
         # Case CRUD + doc search
         "sharelock:cases:read", "sharelock:cases:write",
@@ -95,12 +95,6 @@ def _user_agency(ctx) -> str:
     if not (hasattr(ctx, "user") and ctx.user):
         return "default"
     return getattr(ctx.user, "agency_id", None) or "default"
-
-
-def _get_llm():
-    """Get the unified LLM provider (BYOLLM, billing, per-purpose routing)."""
-    from imperal_sdk.runtime.llm_provider import get_llm_provider
-    return get_llm_provider()
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
