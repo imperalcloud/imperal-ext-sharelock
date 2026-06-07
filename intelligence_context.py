@@ -96,7 +96,7 @@ async def _fetch_inspection_counts(case_id: int, agency_id: str | None = None) -
         )
         return out
 
-    result = {k: _finalize(v) for k, v in buckets.items()}
+    result: dict[str, object] = {k: _finalize(v) for k, v in buckets.items()}
     result["__TOTAL__"] = _finalize(total_all)
 
     def _imp(r: dict) -> float:

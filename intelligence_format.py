@@ -274,7 +274,7 @@ def _fmt_inspection_files(inspections: dict, lines: list) -> None:
     lines.append(f"\n=== TOP FILES BY IMPORTANCE ({len(files)}) ===")
     for i, f in enumerate(files, 1):
         path = f.get("latest_path") or "?"
-        name = path.rsplit("/", 1)[-1] if isinstance(path, str) else "?"
+        name = path.rsplit("/", 1)[-1]
         cat = f.get("category") or "?"
         sub = f.get("subcategory") or ""
         label = f"{cat}/{sub}" if sub else cat
