@@ -19,6 +19,7 @@ _MAX_ENTITIES = 30
 _MAX_AUDIT_EVENTS = 15
 _INSPECTIONS_PAGE = 1000
 _INSPECTIONS_HARD_LIMIT = 5000  # safety bound for very large cases
+_MAX_FILE_ROWS = 15  # bounded per-file detail surfaced for conversation
 
 
 async def _fetch_inspection_counts(case_id: int, agency_id: str | None = None) -> dict:
@@ -97,6 +98,24 @@ async def _fetch_inspection_counts(case_id: int, agency_id: str | None = None) -
 
     result = {k: _finalize(v) for k, v in buckets.items()}
     result["__TOTAL__"] = _finalize(total_all)
+
+    def _imp(r: dict) -> float:
+        v = r.get("importance_score")
+        return float(v) if isinstance(v, (int, float)) else -1.0
+
+    top = sorted(rows, key=_imp, reverse=True)[:_MAX_FILE_ROWS]
+    result["__FILES__"] = [
+        {
+            "latest_path": r.get("latest_path"),
+            "category": r.get("category"),
+            "subcategory": r.get("subcategory"),
+            "file_purpose": r.get("file_purpose"),
+            "importance_score": r.get("importance_score"),
+            "primary_entities": r.get("primary_entities") or [],
+            "extracted_text_sample": (r.get("extracted_text_sample") or "")[:300],
+        }
+        for r in top
+    ]
     return result
 
 

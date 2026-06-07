@@ -234,7 +234,7 @@ def _fmt_inspection_status(inspections: dict, lines: list) -> None:
     total = inspections.get("__TOTAL__") or {}
     lines.append("\n=== INSPECTION STATUS PER CATEGORY ===")
     # Order stable: alphabetical by category key
-    for key in sorted(k for k in inspections.keys() if k != "__TOTAL__"):
+    for key in sorted(k for k in inspections.keys() if k not in ("__TOTAL__", "__FILES__")):
         b = inspections[key]
         imp = b.get("importance_avg")
         imp_s = f"{imp:.2f}" if isinstance(imp, (int, float)) else "—"
@@ -266,6 +266,30 @@ def _fmt_inspection_status(inspections: dict, lines: list) -> None:
     )
 
 
+def _fmt_inspection_files(inspections: dict, lines: list) -> None:
+    """Render bounded per-file detail (INS files) for file-level conversation."""
+    files = (inspections or {}).get("__FILES__") or []
+    if not files:
+        return
+    lines.append(f"\n=== TOP FILES BY IMPORTANCE ({len(files)}) ===")
+    for i, f in enumerate(files, 1):
+        path = f.get("latest_path") or "?"
+        name = path.rsplit("/", 1)[-1] if isinstance(path, str) else "?"
+        cat = f.get("category") or "?"
+        sub = f.get("subcategory") or ""
+        label = f"{cat}/{sub}" if sub else cat
+        imp = f.get("importance_score")
+        imp_s = f"{imp:.2f}" if isinstance(imp, (int, float)) else "—"
+        purpose = (f.get("file_purpose") or "").replace("\n", " ")[:160]
+        ents = ", ".join([str(e) for e in (f.get("primary_entities") or [])][:8])
+        sample = (f.get("extracted_text_sample") or "").replace("\n", " ")[:200]
+        lines.append(f"[F{i}] {name} ({label}, importance: {imp_s}) — {purpose}")
+        if ents:
+            lines.append(f"     entities: {ents}")
+        if sample:
+            lines.append(f"     sample: {sample}")
+
+
 def format_grounded_context(ctx: dict) -> str:
     """Render grounded V3 context with numbered source IDs.
 
@@ -282,6 +306,7 @@ def format_grounded_context(ctx: dict) -> str:
     _fmt_run(run, lines)
     _fmt_taxonomy(ctx.get("taxonomy") or [], lines)
     _fmt_inspection_status(ctx.get("inspections") or {}, lines)
+    _fmt_inspection_files(ctx.get("inspections") or {}, lines)
     _fmt_gaps(ctx.get("gaps") or [], lines)
 
     summs = ctx.get("summaries") or []
