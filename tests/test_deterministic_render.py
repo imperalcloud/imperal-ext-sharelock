@@ -31,3 +31,15 @@ def test_render_contains_defendant_and_charge():
 def test_render_empty_when_no_findings():
     assert render_findings_deterministic({"summaries": []}) == ""
     assert render_findings_deterministic({"error": "x"}) == ""
+
+
+def test_render_empty_when_indictment_fields_blank():
+    out = render_findings_deterministic({"summaries": [{"category": "_indictment", "summary_json": {}}]})
+    assert out == ""
+
+
+def test_render_surfaces_merit_only():
+    out = render_findings_deterministic({"summaries": [
+        {"category": "_indictment", "summary_json": {"prosecutive_merit_overall": "STRONG"}},
+    ]})
+    assert "STRONG" in out

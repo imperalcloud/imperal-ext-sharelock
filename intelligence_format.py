@@ -336,7 +336,12 @@ def render_findings_deterministic(ctx: dict) -> str:
                 code = (c.get("charge_code") or "").strip()
                 title = c.get("charge_title") or "?"
                 tgt = c.get("target_subject") or ""
-                out.append(f"- {code} {title}".strip() + (f" — {tgt}" if tgt else ""))
+                head = f"- {code} {title}".strip() if code else f"- {title}"
+                out.append(head + (f" — {tgt}" if tgt else ""))
+        merit = (sj.get("prosecutive_merit_overall") or "").strip()
+        if merit:
+            reasoning = (sj.get("prosecutive_merit_reasoning") or "").strip()
+            out.append(f"\nProsecutive merit: {merit}" + (f" — {reasoning}" if reasoning else ""))
 
     if cross_cut:
         narr = ((cross_cut.get("summary_json") or {}).get("narrative_synthesis") or "").strip()
