@@ -298,3 +298,57 @@ def format_grounded_context(ctx: dict) -> str:
     _fmt_audit(ctx.get("audit") or [], lines)
 
     return "\n".join(lines)
+
+
+def render_findings_deterministic(ctx: dict) -> str:
+    """Pure data->prose render of precomputed findings (no LLM).
+
+    Safety net: surfaced when the LLM call fails / returns unparseable output,
+    so a completed case never yields an empty answer. Labels are minimal and
+    neutral; the primary Opus path owns user-facing language (ICNLI).
+    """
+    if not ctx or ctx.get("error"):
+        return ""
+    summs = ctx.get("summaries") or []
+    indictment = next((s for s in summs if s.get("category") == "_indictment"), None)
+    cross_cut = next((s for s in summs if s.get("category") == "_cross_cutting"), None)
+    cat_summs = [s for s in summs if not (s.get("category") or "").startswith("_")]
+    out: list[str] = []
+
+    if indictment:
+        sj = indictment.get("summary_json") or {}
+        theory = (sj.get("case_theory") or "").strip()
+        if theory:
+            out.append(f"Case theory: {theory}")
+        targets = sj.get("target_subjects") or []
+        if targets:
+            out.append("\nSubjects:")
+            for t in targets:
+                name = t.get("name") or "?"
+                role = t.get("role") or ""
+                ev = (t.get("evidence_summary") or "").strip()
+                line = f"- {name}" + (f" ({role})" if role else "") + (f" — {ev}" if ev else "")
+                out.append(line)
+        charges = sj.get("candidate_charges") or []
+        if charges:
+            out.append("\nCandidate charges:")
+            for c in charges:
+                code = (c.get("charge_code") or "").strip()
+                title = c.get("charge_title") or "?"
+                tgt = c.get("target_subject") or ""
+                out.append(f"- {code} {title}".strip() + (f" — {tgt}" if tgt else ""))
+
+    if cross_cut:
+        narr = ((cross_cut.get("summary_json") or {}).get("narrative_synthesis") or "").strip()
+        if narr:
+            out.append(f"\nCross-cutting: {narr}")
+
+    if cat_summs:
+        out.append("\nBy category:")
+        for s in cat_summs:
+            cat = s.get("category", "?")
+            es = ((s.get("summary_json") or {}).get("executive_summary") or "").strip()
+            if es:
+                out.append(f"- {cat}: {es}")
+
+    return "\n".join(out).strip()
