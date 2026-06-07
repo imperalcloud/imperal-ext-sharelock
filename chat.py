@@ -29,15 +29,14 @@ SDK v1.6.0 / I-SKELETON-LLM-ONLY: the Layer 3 fingerprint is stored in
 import logging
 import os
 
-from app import _get_llm, _user_email
+from app import _get_llm, _user_email, _user_agency
 from cache_models import CaseContextFingerprint
 from intelligence_context import fetch_grounded_context
-from intelligence_format import format_grounded_context
+from intelligence_format import format_grounded_context, render_findings_deterministic
 from intelligence_guards import context_fingerprint
 from intelligence_response import (
-    _TOOL_NAME,
-    build_intelligence_tool_schema,
-    parse_intelligence_response,
+    build_intelligence_json_instruction,
+    parse_intelligence_json,
 )
 from intelligence_validator import validate_grounded_claims
 
@@ -47,6 +46,18 @@ _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 # TTL for the per-case grounded-context fingerprint — 5 minutes matches the
 # ctx.cache upper bound and is well above typical chat-turn cadence.
 _FP_TTL_SECONDS = 300
+
+# Forensic Q&A model — federal-grade reliability over precomputed facts.
+# Routed via ctx.ai (BYOLLM/admin-config aware); analysis itself runs on Opus in the microservice.
+_QA_MODEL = "claude-opus-4-8"
+
+
+def _text_of(result) -> str:
+    """Extract text from a CompletionResult; .text may be str or list[ContentBlock]."""
+    t = getattr(result, "text", "") or ""
+    if isinstance(t, list):
+        return "\n".join(getattr(b, "text", "") for b in t if getattr(b, "text", ""))
+    return t
 
 
 def _load_prompt(name: str) -> str:
@@ -164,13 +175,10 @@ async def run_intelligence(message: str, history: list,
     6. Append warning footers if issues found. Original answer preserved.
     """
     try:
-        ctx_data = await fetch_grounded_context(case_id)
+        ctx_data = await fetch_grounded_context(case_id, agency_id=_user_agency(ctx))
     except Exception as e:
         log.error(f"INTELLIGENCE grounded fetch failed: {e}")
-        return (
-            "Unable to load case analysis context. Please try again "
-            "or re-run analysis."
-        )
+        return ("Unable to load case analysis context. Please try again or re-run analysis.")
 
     if ctx_data.get("error"):
         return f"Cannot answer: {ctx_data['error']}. Run analysis first."
@@ -223,62 +231,40 @@ async def run_intelligence(message: str, history: list,
         system_parts.insert(0, resolution_note)
     system_parts.append(user_block)
     system_parts.append(
-        "\n"
-        + "=" * 60
+        "\n" + "=" * 60
         + "\nCASE CONTEXT (grounded from V3 analysis pipeline):\n"
-        + "=" * 60
-        + "\n"
-        + context_block
+        + "=" * 60 + "\n" + context_block
     )
     system = "\n\n".join(p for p in system_parts if p)
 
-    messages = list(history_for_llm) + [{"role": "user", "content": message}]
+    prompt = (
+        system
+        + "\n\n" + "=" * 60
+        + "\nCURRENT USER MESSAGE (answer ONLY this):\n" + message
+        + "\n\n" + build_intelligence_json_instruction()
+    )
 
     log.info(
         f"INTELLIGENCE case={case_id} ctx_bytes={len(context_block)} "
-        f"system_bytes={len(system)} msgs={len(messages)} "
-        f"fingerprint={current_fp}"
+        f"prompt_bytes={len(prompt)} fingerprint={current_fp}"
     )
 
-    tool_def = {
-        "name": _TOOL_NAME,
-        "description": (
-            "Emit the structured forensic answer. You MUST call this tool "
-            "exactly once. Do NOT respond with prose outside the tool call."
-        ),
-        "input_schema": build_intelligence_tool_schema(),
-    }
-    tool_choice = {"type": "tool", "name": _TOOL_NAME}
-
     try:
-        resp = await _get_llm().create_message(
-            messages=messages,
-            system=system,
-            max_tokens=2048,
-            tools=[tool_def],
-            tool_choice=tool_choice,
-            purpose="execution",
-            extension_id="sharelock-v2",
-            user_id=str(ctx.user.imperal_id),
-        )
+        result = await ctx.ai.complete(prompt, model=_QA_MODEL, max_tokens=2048)
     except Exception as e:
-        log.error(f"INTELLIGENCE LLM error: {e}")
-        return "Ошибка при обработке запроса. Попробуйте ещё раз."
+        log.error(f"INTELLIGENCE ctx.ai.complete error: {e}")
+        fb = render_findings_deterministic(ctx_data)
+        return fb or "Не удалось обработать запрос. Попробуйте ещё раз."
 
-    # Extract the tool_use block.
-    args = None
-    for block in getattr(resp, "content", ()) or ():
-        if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == _TOOL_NAME:
-            args = getattr(block, "input", None)
-            break
-
-    parsed = parse_intelligence_response(args)
+    text = _text_of(result)
+    parsed = parse_intelligence_json(text)
     if parsed is None:
         log.error(
-            f"INTELLIGENCE case={case_id} LLM did not return a parseable "
-            f"emit_intelligence_response tool call (args={args!r})"
+            f"INTELLIGENCE case={case_id} unparseable completion "
+            f"(head={text[:200]!r}); using deterministic fallback"
         )
-        return "Не удалось получить структурированный ответ от модели. Повторите запрос."
+        fb = render_findings_deterministic(ctx_data)
+        return fb or "Не удалось получить структурированный ответ. Попробуйте ещё раз."
 
     _audit_response(parsed, ctx_data, case_id)
     return parsed.prose
