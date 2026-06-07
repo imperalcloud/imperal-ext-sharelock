@@ -1,5 +1,8 @@
 import pytest
 import intelligence_context as ic
+import skeleton as sk
+from imperal_sdk.testing import MockContext
+from imperal_sdk.types.identity import UserContext
 
 
 @pytest.mark.asyncio
@@ -32,3 +35,29 @@ async def test_fetch_grounded_context_threads_agency_id(monkeypatch):
     flat = [v for vals in seen.values() for v in vals]
     assert flat, "no queries were called"
     assert all(v == "acme" for v in flat), f"un-scoped reads: {seen}"
+
+
+@pytest.mark.asyncio
+async def test_skeleton_refresh_threads_agency_id(monkeypatch):
+    seen = []
+
+    async def _get_cases(user_id, agency_id=None):
+        seen.append(agency_id)
+        return [{"id": 1, "name": "C1", "status": "active"}]
+
+    async def _get_analysis(cid, agency_id=None):
+        seen.append(agency_id); return {"analysis_status": "completed"}
+
+    async def _get_files(cid, agency_id=None):
+        seen.append(agency_id); return []
+
+    monkeypatch.setattr(sk.queries, "get_cases", _get_cases)
+    monkeypatch.setattr(sk.queries, "get_analysis", _get_analysis)
+    monkeypatch.setattr(sk.queries, "get_files", _get_files)
+
+    ctx = MockContext(user_id="u1")
+    ctx.user = ctx.user.model_copy(update={"agency_id": "acme"})
+    await sk.on_skeleton_refresh(ctx)
+
+    assert seen, "no queries called"
+    assert all(a == "acme" for a in seen), f"un-scoped skeleton reads: {seen}"

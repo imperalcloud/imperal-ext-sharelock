@@ -26,7 +26,7 @@ Note on active_case_id:
 import logging
 import os
 
-from app import ext, _user_id
+from app import ext, _user_id, _user_agency
 import queries
 
 log = logging.getLogger("sharelock-v2.skeleton")
@@ -61,8 +61,9 @@ def _pick_active_case(enriched: list[dict]) -> dict | None:
 async def on_skeleton_refresh(ctx, **kwargs):
     """Refresh ALL case data for the user. Gives AI full picture of workspace."""
     user_id = _user_id(ctx)
+    agency = _user_agency(ctx)
     try:
-        cases = await queries.get_cases(user_id)
+        cases = await queries.get_cases(user_id, agency_id=agency)
         if not cases:
             return {"response": {"cases_count": 0, "cases": [], "active_case_id": None,
                                  "analysis_status": None}}
@@ -72,7 +73,7 @@ async def on_skeleton_refresh(ctx, **kwargs):
             cid = c.get("id")
             entry = {"id": cid, "name": c.get("name", ""), "status": c.get("status", "")}
             try:
-                ar = await queries.get_analysis(cid)
+                ar = await queries.get_analysis(cid, agency_id=agency)
                 entry["analysis_status"] = ar.get("analysis_status")
                 entry["analysis_updated_at"] = ar.get("analysis_updated_at") or \
                                                ar.get("updated_at") or \
@@ -80,7 +81,7 @@ async def on_skeleton_refresh(ctx, **kwargs):
             except Exception:
                 entry["analysis_status"] = None
             try:
-                files = await queries.get_files(cid)
+                files = await queries.get_files(cid, agency_id=agency)
                 entry["file_count"] = len(files)
             except Exception:
                 entry["file_count"] = 0
@@ -94,7 +95,7 @@ async def on_skeleton_refresh(ctx, **kwargs):
         files = []
         file_count = 0
         try:
-            files_raw = await queries.get_files(case_id)
+            files_raw = await queries.get_files(case_id, agency_id=agency)
             file_count = len(files_raw)
             files = [{"filename": f.get("filename", ""), "size": f.get("size", 0)}
                      for f in files_raw]
