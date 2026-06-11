@@ -16,6 +16,7 @@ import logging
 
 from imperal_sdk import ui
 from app import ext, _user_id, CASES_API_URL
+from auth_gate import _fetch_unlock, locked_panel
 import queries
 import panels_analysis as pa
 from cache_models import CaseSummary
@@ -44,6 +45,9 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
     `case_id` is overwritten here to avoid showing the previous case after
     the user selected a new one.
     """
+    if not (await _fetch_unlock(ctx)).unlocked:
+        return locked_panel()
+
     if section:
         case_id = section
 

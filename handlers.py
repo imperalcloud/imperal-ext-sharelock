@@ -16,6 +16,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from app import chat, _user_id, _user_agency
+from auth_gate import require_unlock
 from imperal_sdk.chat import ActionResult
 import queries
 from queries import CasesAPIError
@@ -162,6 +163,7 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
                    "original language exactly. Do NOT paraphrase, translate, "
                    "or summarize."
                ))
+@require_unlock
 async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     """Main conversational interface — state machine dispatches modes.
 
@@ -284,6 +286,7 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
                    "hallucination invariant I-CHAT-FUNCTION-VERBATIM-PARAMS "
                    "applies — rephrased input silently breaks dedupe."
                ))
+@require_unlock
 async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
     """Create case in Cases API + folder in Nextcloud (B7: validate + dedupe)."""
     user_id = _user_id(ctx)
@@ -329,6 +332,7 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
                effects=["create:case"],
                data_model=SyncCasesResponse,
                description="Sync cases from Nextcloud folders — create cases for new folders")
+@require_unlock
 async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
     """Scan Nextcloud for folders, create cases for any that don't exist yet."""
     user_id = _user_id(ctx)
@@ -374,6 +378,7 @@ async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
 @chat.function("list_cases", action_type="read",
                data_model=CaseListResponse,
                description="List all investigation cases")
+@require_unlock
 async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
     """List all cases for the current user."""
     user_id = _user_id(ctx)
@@ -408,6 +413,7 @@ async def fn_list_cases(ctx, params: EmptyParams) -> ActionResult:
                    "translate, normalise, or auto-correct. The Cases API "
                    "performs exact substring matching."
                ))
+@require_unlock
 async def fn_search_docs(ctx, params: SearchDocsParams) -> ActionResult:
     """Search case documents via Cases API."""
     case_id = params.case_id

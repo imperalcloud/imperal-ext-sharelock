@@ -27,6 +27,7 @@ import logging
 import os
 
 from app import ext, _user_id, _user_agency
+from auth_gate import _fetch_unlock, locked_fact
 import queries
 
 log = logging.getLogger("sharelock-v2.skeleton")
@@ -60,6 +61,8 @@ def _pick_active_case(enriched: list[dict]) -> dict | None:
               description="Sharelock case roster + active-case snapshot for classifier.")
 async def on_skeleton_refresh(ctx, **kwargs):
     """Refresh ALL case data for the user. Gives AI full picture of workspace."""
+    if not (await _fetch_unlock(ctx)).unlocked:
+        return {"response": locked_fact()}
     user_id = _user_id(ctx)
     agency = _user_agency(ctx)
     try:

@@ -13,6 +13,7 @@ from xml.etree import ElementTree
 
 from imperal_sdk import ui
 from app import ext, _user_id, NC_URL, NC_USER, NC_PASS, NC_BASE_PATH
+from auth_gate import _fetch_unlock, locked_panel
 from cache_models import (
     NextcloudFolderListing,
     NextcloudFileListing,
@@ -254,6 +255,8 @@ async def _list_nc_files_recursive(folder: str) -> list[dict]:
            default_width=300, min_width=240, max_width=400)
 async def panel_sidebar(ctx, section: str = "", **kwargs):
     """Left panel: Nextcloud folders as cases + recursive file list."""
+    if not (await _fetch_unlock(ctx)).unlocked:
+        return locked_panel()
     user_id = _user_id(ctx)
     active_folder = section or ""
 

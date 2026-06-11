@@ -271,3 +271,16 @@ async def get_latest_active_run(case_id: int, agency_id: Optional[str] = None) -
     """Return the latest run for a case (or {} if none). Newest first by version."""
     runs = await list_runs(case_id, agency_id=agency_id)
     return runs[0] if runs else {}
+
+
+# ── Auth unlock (Track A login) ───────────────────────────────────────────────
+
+
+async def get_unlock(imperal_id: str) -> dict:
+    """Live Sharelock unlock state for an imperal_id (service-key gated).
+
+    Returns ``{"unlocked": bool, "agency_id": str, "role": str}`` —
+    consumed by auth_gate._fetch_unlock (the @require_unlock gate).
+    """
+    resp = await _get(f"/auth/unlock/{imperal_id}")
+    return resp if isinstance(resp, dict) else {"unlocked": False}

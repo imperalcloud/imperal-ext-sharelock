@@ -1,4 +1,5 @@
 import pytest
+import auth_gate
 import intelligence_context as ic
 import skeleton as sk
 from imperal_sdk.testing import MockContext
@@ -52,6 +53,11 @@ async def test_skeleton_refresh_threads_agency_id(monkeypatch):
     monkeypatch.setattr(sk.queries, "get_cases", _get_cases)
     monkeypatch.setattr(sk.queries, "get_analysis", _get_analysis)
     monkeypatch.setattr(sk.queries, "get_files", _get_files)
+
+    # Track A gate: the skeleton is unlock-gated — unlock for this test
+    async def _unlocked(ctx):
+        return auth_gate.UnlockState(unlocked=True, agency_id="acme")
+    monkeypatch.setattr(sk, "_fetch_unlock", _unlocked)
 
     ctx = MockContext(user_id="u1")
     ctx.user = ctx.user.model_copy(update={"agency_id": "acme"})
