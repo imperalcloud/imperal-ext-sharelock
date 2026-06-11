@@ -59,11 +59,11 @@ class NextcloudWebDAV(StorageBackend):
     """Nextcloud storage via WebDAV (PROPFIND/GET/PUT/DELETE/MKCOL)."""
 
     def __init__(self, url: str = "", user: str = "", password: str = "",
-                 base_path: str = "/Sharelock/"):
+                 base_path: str = ""):
         self.url = (url or NC_URL).rstrip("/")
         self.user = user or NC_USER
         self.password = password or NC_PASS
-        self.base_path = base_path
+        self.base_path = base_path or NC_BASE_PATH
         self._dav = f"{self.url}/remote.php/dav/files/{self.user}"
 
     def _auth(self) -> httpx.BasicAuth:
@@ -183,7 +183,7 @@ def create_backend(settings: dict | None = None) -> StorageBackend:
             url=nc.get("url", ""),
             user=nc.get("username", ""),
             password=nc.get("password", ""),
-            base_path=nc.get("base_path", "/Sharelock/"),
+            base_path=nc.get("base_path", "") or NC_BASE_PATH,
         )
     elif backend_type == "s3":
         return S3Backend(**storage.get("s3", {}))
