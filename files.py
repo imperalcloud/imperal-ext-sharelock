@@ -6,6 +6,7 @@ Nextcloud WebDAV is the default (and currently only active) backend.
 S3 and Azure stubs ready for future implementation.
 """
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from xml.etree import ElementTree
@@ -13,6 +14,11 @@ from xml.etree import ElementTree
 import httpx
 
 from app import NC_URL, NC_USER, NC_PASS, NC_BASE_PATH
+# Module-level on purpose: bare ext module names (app/queries/...) are only
+# resolvable while the LOADER imports this extension. A runtime-lazy
+# `import queries` resolves against whichever extension loaded last
+# (live incident 2026-06-12: panels got microsoft-ads' app.py).
+import queries
 
 log = logging.getLogger("sharelock-v2.files")
 
@@ -204,10 +210,6 @@ def reset_backend_cache() -> None:
 async def get_agency_backend(agency_id: str) -> StorageBackend:
     """Per-agency storage backend (in-process TTL cache; creds never leave
     this module — I-SECRETS-HANDLER-SCOPE-MEMORY discipline)."""
-    import time
-
-    import queries
-
     key = agency_id or "default"
     now = time.monotonic()
     cached = _backends.get(key)

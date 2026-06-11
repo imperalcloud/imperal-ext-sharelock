@@ -20,6 +20,11 @@ from auth_gate import _fetch_unlock, locked_panel
 import queries
 import panels_analysis as pa
 from cache_models import CaseSummary
+# Module-level on purpose (NOT inside _fetch): bare ext module names resolve
+# correctly only while the loader imports this extension; a runtime-lazy
+# import re-executes case_resolver against another ext's namespace
+# (same incident class as files.get_agency_backend, 2026-06-12).
+from case_resolver import load_case_data_from_api
 from panels import _cached_user_cases  # circuit-breaker for Cases API panel reads
 from panels_gap_review import build_gap_review
 from panels_graph import build_graph_panel
@@ -148,7 +153,6 @@ async def _load_case_summary(ctx, api_case_id: int | None) -> CaseSummary:
         try:
             # Reuse the deterministic loader so the cache ends up in the
             # exact shape the chat path and skeleton also consume.
-            from case_resolver import load_case_data_from_api
             data = await load_case_data_from_api(user_id, int(api_case_id or 0))
         except Exception as exc:
             log.warning(f"case_summary fetch failed for case {api_case_id}: {exc}")
