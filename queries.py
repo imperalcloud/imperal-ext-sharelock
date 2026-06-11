@@ -284,3 +284,18 @@ async def get_unlock(imperal_id: str) -> dict:
     """
     resp = await _get(f"/auth/unlock/{imperal_id}")
     return resp if isinstance(resp, dict) else {"unlocked": False}
+
+
+# ── Agency storage settings (Track B) ─────────────────────────────────────────
+
+
+async def get_agency_storage(agency_id: str) -> dict:
+    """Decrypted per-agency storage settings from the Cases API.
+
+    ``{"configured": False}`` when the agency has no row — callers fall
+    back to the NC_* env (default-agency storage). Credentials in the
+    response are held in-process only (files.get_agency_backend);
+    NEVER write them into ctx.cache.
+    """
+    resp = await _get(f"/agency/{agency_id}/storage")
+    return resp if isinstance(resp, dict) else {"configured": False}

@@ -58,23 +58,28 @@ _PROPFIND_BODY = (
 )
 
 
-async def list_top_folders() -> list[str]:
-    """Return the list of top-level folder names under NC_BASE_PATH.
+async def list_top_folders(backend) -> list[str]:
+    """Return the list of top-level folder names under the backend's base path.
 
-    Returns an empty list if NC is not configured or any error occurs. The
-    caller is responsible for deciding what to do with an empty list.
+    ``backend`` is a NextcloudWebDAV-shaped object exposing ``url``, ``user``,
+    ``password`` and ``base_path`` (see files.py). Pure helper: the caller
+    resolves the per-agency backend (files.get_agency_backend) and passes it
+    in — no app/ctx imports here.
+
+    Returns an empty list if the backend is not configured or any error
+    occurs. The caller is responsible for deciding what to do with an
+    empty list.
     """
     try:
         import httpx
         from xml.etree import ElementTree
         from urllib.parse import unquote
-        from app import NC_URL, NC_USER, NC_PASS, NC_BASE_PATH
-        if not NC_URL or not NC_USER:
+        if not backend.url or not backend.user:
             return []
-        dav_url = f"{NC_URL}/remote.php/dav/files/{NC_USER}{NC_BASE_PATH}"
+        dav_url = f"{backend.url}/remote.php/dav/files/{backend.user}{backend.base_path}"
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.request("PROPFIND", dav_url,
-                                auth=httpx.BasicAuth(NC_USER, NC_PASS),
+                                auth=httpx.BasicAuth(backend.user, backend.password),
                                 headers={"Depth": "1",
                                          "Content-Type": "application/xml"},
                                 content=_PROPFIND_BODY)
@@ -82,7 +87,7 @@ async def list_top_folders() -> list[str]:
                 return []
         ns = {"d": "DAV:"}
         root = ElementTree.fromstring(r.text)
-        base = NC_BASE_PATH.strip("/").split("/")[-1]
+        base = backend.base_path.strip("/").split("/")[-1]
         out: list[str] = []
         for resp in root.findall("d:response", ns):
             href = resp.findtext("d:href", "", ns)
@@ -100,10 +105,13 @@ async def list_top_folders() -> list[str]:
         return []
 
 
-async def folder_exists(name: str) -> bool:
-    """Return True if a top-level folder with this name exists (case-insensitive)."""
+async def folder_exists(name: str, backend) -> bool:
+    """Return True if a top-level folder with this name exists (case-insensitive).
+
+    ``backend`` is passed through to list_top_folders (per-agency storage).
+    """
     target = (name or "").strip().lower()
     if not target:
         return False
-    folders = await list_top_folders()
+    folders = await list_top_folders(backend)
     return any(f.lower() == target for f in folders)

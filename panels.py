@@ -12,8 +12,9 @@ import httpx
 from xml.etree import ElementTree
 
 from imperal_sdk import ui
-from app import ext, _user_id, NC_URL, NC_USER, NC_PASS, NC_BASE_PATH
+from app import ext, _user_id, _user_agency
 from auth_gate import _fetch_unlock, locked_panel
+import files
 from cache_models import (
     NextcloudFolderListing,
     NextcloudFileListing,
@@ -61,9 +62,11 @@ async def _cached_nc_folders(ctx) -> list[str]:
 
     Tries PROPFIND with _FAST_TIMEOUT_FOLDERS; on timeout/error returns
     last cached value. TTL _TTL_NC_FOLDERS. Returns [] if neither live
-    nor cache is available.
+    nor cache is available. Cache key is agency-scoped — listings come
+    from the agency's own storage backend (Track B).
     """
-    key = "nc_folders:default"
+    agency = _user_agency(ctx)
+    key = f"nc_folders:{agency}"
     cached: list[str] = []
     try:
         c = await ctx.cache.get(key, NextcloudFolderListing)
@@ -72,8 +75,15 @@ async def _cached_nc_folders(ctx) -> list[str]:
     except Exception as e:
         log.debug(f"nc_folders cache read failed: {e}")
 
+    async def _fetch_live() -> list[str]:
+        # Backend resolution (files.get_agency_backend, in-process TTL
+        # cache) stays inside the fast-timeout envelope so a degraded
+        # Cases API can't stall the panel render past the circuit breaker.
+        backend = await files.get_agency_backend(agency)
+        return await _list_nc_folders(backend)
+
     try:
-        live = await asyncio.wait_for(_list_nc_folders(),
+        live = await asyncio.wait_for(_fetch_live(),
                                        timeout=_FAST_TIMEOUT_FOLDERS)
         try:
             await ctx.cache.set(key,
@@ -93,12 +103,14 @@ async def _cached_nc_folders(ctx) -> list[str]:
 
 
 async def _cached_nc_files(ctx, folder: str) -> list[dict]:
-    """Fast NC recursive file list with stale-cache fallback (per folder)."""
+    """Fast NC recursive file list with stale-cache fallback (per
+    agency + folder)."""
     if not folder:
         return []
+    agency = _user_agency(ctx)
     # Sanitise folder name into safe key suffix per CacheClient I-CACHE-KEY-SAFETY.
     safe = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in folder)[:80]
-    key = f"nc_files:{safe}"
+    key = f"nc_files:{agency}:{safe}"
     cached: list[dict] = []
     try:
         c = await ctx.cache.get(key, NextcloudFileListing)
@@ -107,8 +119,13 @@ async def _cached_nc_files(ctx, folder: str) -> list[dict]:
     except Exception as e:
         log.debug(f"nc_files cache read failed key={key}: {e}")
 
+    async def _fetch_live() -> list[dict]:
+        # Same fast-timeout envelope rationale as _cached_nc_folders.
+        backend = await files.get_agency_backend(agency)
+        return await _list_nc_files_recursive(backend, folder)
+
     try:
-        live = await asyncio.wait_for(_list_nc_files_recursive(folder),
+        live = await asyncio.wait_for(_fetch_live(),
                                        timeout=_FAST_TIMEOUT_FILES)
         # Cap at _MAX_CACHED_FILES + thin projection (drop `name` —
         # it's just basename of `path`) to stay under
@@ -173,22 +190,25 @@ async def _cached_user_cases(ctx, user_id: str) -> list[dict]:
         return cached
 
 
-def _dav_url(path: str = "") -> str:
-    return f"{NC_URL}/remote.php/dav/files/{NC_USER}{NC_BASE_PATH}{quote(path, safe='/')}"
+def _dav_url(backend, path: str = "") -> str:
+    """DAV URL for a path under the backend's base path (per-agency NC)."""
+    return (f"{backend.url}/remote.php/dav/files/{backend.user}"
+            f"{backend.base_path}{quote(path, safe='/')}")
 
 
 def _propfind_body():
     return '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getcontentlength/><d:resourcetype/></d:prop></d:propfind>'
 
 
-async def _list_nc_folders() -> list[str]:
-    """Top-level folders = cases."""
-    if not NC_URL or not NC_USER:
+async def _list_nc_folders(backend) -> list[str]:
+    """Top-level folders = cases (in the given agency's storage backend)."""
+    if not backend.url or not backend.user:
         return []
-    url = _dav_url("") + "/"
+    url = _dav_url(backend, "") + "/"
     try:
         async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.request("PROPFIND", url, auth=httpx.BasicAuth(NC_USER, NC_PASS),
+            r = await c.request("PROPFIND", url,
+                                auth=httpx.BasicAuth(backend.user, backend.password),
                                 headers={"Depth": "1", "Content-Type": "application/xml"},
                                 content=_propfind_body())
             if r.status_code >= 300:
@@ -205,7 +225,7 @@ async def _list_nc_folders() -> list[str]:
                 continue
             name = href.split("/")[-1]
             # Skip the root folder itself
-            base = NC_BASE_PATH.strip("/").split("/")[-1]
+            base = backend.base_path.strip("/").split("/")[-1]
             if name and name != base:
                 folders.append(name)
         return folders
@@ -214,14 +234,15 @@ async def _list_nc_folders() -> list[str]:
         return []
 
 
-async def _list_nc_files_recursive(folder: str) -> list[dict]:
-    """All files in folder recursively."""
-    if not NC_URL or not NC_USER:
+async def _list_nc_files_recursive(backend, folder: str) -> list[dict]:
+    """All files in folder recursively (in the given agency's backend)."""
+    if not backend.url or not backend.user:
         return []
-    url = _dav_url(folder) + "/"
+    url = _dav_url(backend, folder) + "/"
     try:
         async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.request("PROPFIND", url, auth=httpx.BasicAuth(NC_USER, NC_PASS),
+            r = await c.request("PROPFIND", url,
+                                auth=httpx.BasicAuth(backend.user, backend.password),
                                 headers={"Depth": "infinity", "Content-Type": "application/xml"},
                                 content=_propfind_body())
             if r.status_code >= 300:
@@ -229,7 +250,7 @@ async def _list_nc_files_recursive(folder: str) -> list[dict]:
         ns = {"d": "DAV:"}
         root = ElementTree.fromstring(r.text)
         # Decode the base href for comparison
-        base_decoded = unquote(url.split(NC_URL)[-1]).rstrip("/")
+        base_decoded = unquote(url.split(backend.url)[-1]).rstrip("/")
         files = []
         for resp in root.findall("d:response", ns):
             raw_href = resp.findtext("d:href", "", ns).rstrip("/")

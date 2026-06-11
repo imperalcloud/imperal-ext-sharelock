@@ -23,7 +23,7 @@ from queries import CasesAPIError
 import chat as chat_engine
 from case_resolver import resolve_case_id, load_case_data_from_api
 from cache_models import CaseSummary
-from files import create_backend
+import files
 from validation import validate_case_name, folder_exists, list_top_folders
 from models import (
     CaseChatResponse, CaseListResponse, DocSearchResponse,
@@ -82,18 +82,6 @@ class SearchDocsParams(BaseModel):
         "substring matching; rephrased queries return empty results."
     ))
     case_id: int = Field(0, description="Case ID (0 = active case)")
-
-
-# ── Storage ───────────────────────────────────────────────────────────────────
-
-_storage = None
-
-
-def _get_storage():
-    global _storage
-    if _storage is None:
-        _storage = create_backend()
-    return _storage
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -294,7 +282,10 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
     if err:
         return ActionResult.error(err, retryable=False)
 
-    if await folder_exists(clean_name):
+    agency = _user_agency(ctx)
+    storage = await files.get_agency_backend(agency)
+
+    if await folder_exists(clean_name, storage):
         return ActionResult.error(
             f"A Nextcloud folder named '{clean_name}' already exists. "
             "Use sync_cases to register it, or choose a different name.",
@@ -302,14 +293,12 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
         )
 
     try:
-        agency = _user_agency(ctx)
         result = await queries.create_case(user_id, clean_name,
                                            params.description or "",
                                            agency_id=agency)
         case_id = result.get("id", "?")
 
         try:
-            storage = _get_storage()
             await storage.mkdir(clean_name)
             log.info(f"Created Nextcloud folder: {clean_name}")
         except Exception as e:
@@ -342,7 +331,8 @@ async def fn_sync_cases(ctx, params: EmptyParams) -> ActionResult:
         existing_names = {c.get("name", "").strip().lower()
                           for c in existing_cases}
 
-        folders = await list_top_folders()
+        storage = await files.get_agency_backend(agency)
+        folders = await list_top_folders(storage)
 
         created, skipped = [], []
         for folder_name in folders:

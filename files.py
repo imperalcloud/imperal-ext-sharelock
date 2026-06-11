@@ -191,3 +191,35 @@ def create_backend(settings: dict | None = None) -> StorageBackend:
         return AzureBlobBackend(**storage.get("azure_blob", {}))
     else:
         raise ValueError(f"Unknown storage backend: {backend_type}")
+
+
+_BACKEND_TTL = 300.0  # seconds; settings change rarely (admin operation)
+_backends: dict[str, tuple[StorageBackend, float]] = {}
+
+
+def reset_backend_cache() -> None:
+    _backends.clear()
+
+
+async def get_agency_backend(agency_id: str) -> StorageBackend:
+    """Per-agency storage backend (in-process TTL cache; creds never leave
+    this module — I-SECRETS-HANDLER-SCOPE-MEMORY discipline)."""
+    import time
+
+    import queries
+
+    key = agency_id or "default"
+    now = time.monotonic()
+    cached = _backends.get(key)
+    if cached is not None and now - cached[1] < _BACKEND_TTL:
+        return cached[0]
+    settings = None
+    try:
+        resp = await queries.get_agency_storage(key)
+        if resp.get("configured"):
+            settings = resp
+    except Exception:
+        settings = None  # Cases API degraded -> env fallback keeps working
+    backend = create_backend(settings)
+    _backends[key] = (backend, now)
+    return backend
