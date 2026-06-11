@@ -107,10 +107,11 @@ def _decision_bar(case_id, has_blocking: bool) -> ui.UINode:
     ])
 
 
-async def build_gap_review(case_id: int) -> ui.UINode:
+async def build_gap_review(case_id: int,
+                           agency_id: str | None = None) -> ui.UINode:
     """Build the Gap Review view for a case. Fetches run + gaps via queries."""
     try:
-        run = await queries.get_latest_active_run(case_id)
+        run = await queries.get_latest_active_run(case_id, agency_id=agency_id)
     except Exception as exc:
         log.error(f"gap_review: failed to load run case_id={case_id}: {exc}")
         return ui.Alert(title="Gap review unavailable",
@@ -130,7 +131,7 @@ async def build_gap_review(case_id: int) -> ui.UINode:
     status = run.get("status", "unknown")
 
     try:
-        gaps = await queries.list_gaps(case_id, run_id)
+        gaps = await queries.list_gaps(case_id, run_id, agency_id=agency_id)
     except Exception as exc:
         log.error(f"gap_review: failed to load gaps case_id={case_id} run_id={run_id}: {exc}")
         gaps = []
@@ -143,7 +144,7 @@ async def build_gap_review(case_id: int) -> ui.UINode:
     carried_forward_from = None
     if not gaps:
         try:
-            gaps = await queries.list_gaps(case_id, None)
+            gaps = await queries.list_gaps(case_id, None, agency_id=agency_id)
             if gaps:
                 first_gap_run = gaps[0].get("run_id")
                 if first_gap_run and first_gap_run != run_id:
@@ -161,7 +162,8 @@ async def build_gap_review(case_id: int) -> ui.UINode:
         or run.get("confidence_potential") is None
     ):
         try:
-            old_run = await queries.get_run(case_id, carried_forward_from)
+            old_run = await queries.get_run(case_id, carried_forward_from,
+                                            agency_id=agency_id)
             for fld in ("confidence_current", "confidence_potential"):
                 if run.get(fld) is None and old_run.get(fld) is not None:
                     run[fld] = old_run[fld]

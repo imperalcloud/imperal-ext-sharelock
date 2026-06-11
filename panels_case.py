@@ -15,7 +15,7 @@ entities payload panels need to render.
 import logging
 
 from imperal_sdk import ui
-from app import ext, _user_id, CASES_API_URL
+from app import ext, _user_id, _user_agency, CASES_API_URL
 from auth_gate import _fetch_unlock, locked_panel
 import queries
 import panels_analysis as pa
@@ -153,7 +153,9 @@ async def _load_case_summary(ctx, api_case_id: int | None) -> CaseSummary:
         try:
             # Reuse the deterministic loader so the cache ends up in the
             # exact shape the chat path and skeleton also consume.
-            data = await load_case_data_from_api(user_id, int(api_case_id or 0))
+            data = await load_case_data_from_api(
+                user_id, int(api_case_id or 0),
+                agency_id=_user_agency(ctx))
         except Exception as exc:
             log.warning(f"case_summary fetch failed for case {api_case_id}: {exc}")
             data = {}
@@ -198,7 +200,8 @@ async def _build_analysis_tab(ctx, folder_name: str):
     if analysis_status == "running" and progress:
         run = {}
         try:
-            run = await queries.get_latest_active_run(api_case_id)
+            run = await queries.get_latest_active_run(
+                api_case_id, agency_id=_user_agency(ctx))
         except Exception as exc:
             log.warning(f"analysis tab: failed to load run for case {api_case_id}: {exc}")
         return pa.build_progress_with_controls(progress, api_case_id, run)
@@ -247,7 +250,7 @@ async def _build_gap_review_tab(ctx, folder_name: str):
         return ui.Alert(title="Not Registered",
                         message="Register this folder as a case first.",
                         type="info")
-    return await build_gap_review(api_case_id)
+    return await build_gap_review(api_case_id, agency_id=_user_agency(ctx))
 
 
 async def _build_graph_tab(ctx, folder_name: str):
@@ -258,7 +261,7 @@ async def _build_graph_tab(ctx, folder_name: str):
         return ui.Alert(title="Not Registered",
                         message="Register this folder as a case first.",
                         type="info")
-    return await build_graph_panel(api_case_id)
+    return await build_graph_panel(api_case_id, agency_id=_user_agency(ctx))
 
 
 async def _build_report_tab(ctx, folder_name: str):
@@ -283,8 +286,9 @@ async def _build_report_tab(ctx, folder_name: str):
             ui.Text("Run analysis first to generate a forensic intelligence report."),
         ])
 
+    agency = _user_agency(ctx)
     try:
-        analysis = await queries.get_analysis(case_id)
+        analysis = await queries.get_analysis(case_id, agency_id=agency)
         report_text = analysis.get("analysis_result", "")
     except Exception:
         report_text = ""
@@ -304,7 +308,7 @@ async def _build_report_tab(ctx, folder_name: str):
     report_url = ""
     incomplete = False
     try:
-        runs = await queries.list_runs(case_id)
+        runs = await queries.list_runs(case_id, agency_id=agency)
         completed = [r for r in runs if r.get("status") == "completed"]
         chosen = completed[0] if completed else (runs[0] if runs else None)
         if chosen and chosen.get("run_id") is not None:
@@ -313,6 +317,7 @@ async def _build_report_tab(ctx, folder_name: str):
             try:
                 signed = await queries.sign_report_url(
                     case_id, run_id, fmt="pdf", ttl=600,
+                    agency_id=agency,
                 )
                 report_url = signed.get("url", "")
                 # If we're forced to use an incomplete run, add the flag

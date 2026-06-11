@@ -184,7 +184,7 @@ def extract_case_id_from_text(message: str) -> int | None:
 
 
 async def resolve_case_from_message(
-    user_id: str, message: str,
+    user_id: str, message: str, agency_id: str | None = None,
 ) -> tuple[int | None, str | None]:
     """Extract case_id from a user message.
 
@@ -208,7 +208,7 @@ async def resolve_case_from_message(
         return None, None
 
     try:
-        cases = await queries.get_cases(user_id)
+        cases = await queries.get_cases(user_id, agency_id=agency_id)
     except Exception as e:
         log.warning(f"resolve_case_from_message: get_cases({user_id}) failed: {e}")
         return None, None
@@ -294,10 +294,12 @@ async def resolve_case_from_message(
     return None, None
 
 
-async def pick_fallback_single_case(user_id: str) -> int | None:
+async def pick_fallback_single_case(
+    user_id: str, agency_id: str | None = None,
+) -> int | None:
     """Return the sole case's id if the user has exactly one. Else None."""
     try:
-        cases = await queries.get_cases(user_id)
+        cases = await queries.get_cases(user_id, agency_id=agency_id)
     except Exception as e:
         log.warning(f"pick_fallback_single_case: get_cases({user_id}) failed: {e}")
         return None
@@ -310,6 +312,7 @@ async def resolve_case_from_history(
     user_id: str,
     history: list | None,
     max_turns: int = 6,
+    agency_id: str | None = None,
 ) -> tuple[int | None, str | None]:
     """Scan recent USER turns for the most recently mentioned case.
 
@@ -329,7 +332,7 @@ async def resolve_case_from_history(
     if not history:
         return None, None
     try:
-        cases = await queries.get_cases(user_id)
+        cases = await queries.get_cases(user_id, agency_id=agency_id)
     except Exception as e:
         log.warning(f"resolve_case_from_history: get_cases({user_id}) failed: {e}")
         return None, None
@@ -402,6 +405,7 @@ async def resolve_case_id(
     panel_case_id: int | None,
     skeleton_case_id: int | None,
     history: list | None = None,
+    agency_id: str | None = None,
 ) -> tuple[int | None, str | None]:
     """Apply the full resolution order. Returns ``(case_id, path)``.
 
@@ -422,19 +426,21 @@ async def resolve_case_id(
     if panel_case_id:
         return panel_case_id, "panel"
 
-    cid, path = await resolve_case_from_message(user_id, message)
+    cid, path = await resolve_case_from_message(user_id, message,
+                                                agency_id=agency_id)
     if cid:
         return cid, path
 
     if history:
-        cid, path = await resolve_case_from_history(user_id, history)
+        cid, path = await resolve_case_from_history(user_id, history,
+                                                    agency_id=agency_id)
         if cid:
             return cid, path
 
     if skeleton_case_id:
         return skeleton_case_id, "skeleton"
 
-    lone = await pick_fallback_single_case(user_id)
+    lone = await pick_fallback_single_case(user_id, agency_id=agency_id)
     if lone:
         return lone, "single_case"
 
@@ -444,7 +450,9 @@ async def resolve_case_id(
 # ── Cold-skeleton loader ──────────────────────────────────────────────────────
 
 
-async def load_case_data_from_api(user_id: str, case_id: int) -> dict:
+async def load_case_data_from_api(
+    user_id: str, case_id: int, agency_id: str | None = None,
+) -> dict:
     """Fetch case snapshot from Cases API when skeleton is cold/stale.
 
     Returns the same shape used by skeleton.case_status:
@@ -453,7 +461,7 @@ async def load_case_data_from_api(user_id: str, case_id: int) -> dict:
     log.info(f"load_case_data_from_api user={user_id} case={case_id}")
     result: dict = {}
     try:
-        cases = await queries.get_cases(user_id)
+        cases = await queries.get_cases(user_id, agency_id=agency_id)
         result["cases"] = [{"id": c.get("id"), "name": c.get("name", "")}
                            for c in cases[:20]]
         active = next((c for c in cases if c.get("id") == case_id),
@@ -465,12 +473,12 @@ async def load_case_data_from_api(user_id: str, case_id: int) -> dict:
         log.warning(f"load_case_data_from_api: cases fetch failed: {e}")
     if case_id:
         try:
-            ar = await queries.get_analysis(case_id)
+            ar = await queries.get_analysis(case_id, agency_id=agency_id)
             result["analysis_status"] = ar.get("analysis_status")
         except Exception:
             pass
         try:
-            files = await queries.get_files(case_id)
+            files = await queries.get_files(case_id, agency_id=agency_id)
             result["file_count"] = len(files)
             result["files"] = [{"filename": f.get("filename", ""),
                                 "size": f.get("size", 0)} for f in files]

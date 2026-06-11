@@ -72,13 +72,15 @@ def _slim_edge(e: dict) -> dict:
     }
 
 
-async def build_graph_panel(case_id: int) -> ui.UINode:
+async def build_graph_panel(case_id: int,
+                            agency_id: str | None = None) -> ui.UINode:
     """Build the Intelligence Graph panel for a case."""
     try:
         payload = await queries.get_graph(
             case_id,
             max_nodes=_MAX_NODES_FETCH,
             min_mentions=_MIN_MENTIONS,
+            agency_id=agency_id,
         )
     except Exception as exc:
         log.error(f"graph: failed to fetch case_id={case_id}: {exc}")

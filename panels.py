@@ -153,7 +153,13 @@ async def _cached_nc_files(ctx, folder: str) -> list[dict]:
 
 
 async def _cached_user_cases(ctx, user_id: str) -> list[dict]:
-    """Fast `queries.get_cases(user_id)` with stale-cache fallback."""
+    """Fast agency-scoped ``queries.get_cases`` with stale-cache fallback.
+
+    Cache key stays user-scoped (user_id is globally unique; a user
+    belongs to exactly one agency) — only the live fetch carries the
+    X-Imperal-Agency-ID header (Track C).
+    """
+    agency = _user_agency(ctx)
     safe_uid = "".join(ch if ch.isalnum() or ch in "_-" else "_"
                        for ch in (user_id or ""))[:80]
     key = f"user_cases:{safe_uid or 'anon'}"
@@ -166,8 +172,9 @@ async def _cached_user_cases(ctx, user_id: str) -> list[dict]:
         log.debug(f"user_cases cache read failed: {e}")
 
     try:
-        live = await asyncio.wait_for(queries.get_cases(user_id),
-                                       timeout=_FAST_TIMEOUT_CASES)
+        live = await asyncio.wait_for(
+            queries.get_cases(user_id, agency_id=agency),
+            timeout=_FAST_TIMEOUT_CASES)
         # Cache the THIN projection (no embedded `files[]` arrays) to
         # stay under I-CACHE-VALUE-SIZE-CAP-64KB even with 100 cases.
         # Live render gets the full payload.

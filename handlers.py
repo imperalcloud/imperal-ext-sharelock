@@ -98,7 +98,8 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
 
     async def _fetch() -> CaseSummary:
         if case_id:
-            data = await load_case_data_from_api(user_id, case_id)
+            data = await load_case_data_from_api(
+                user_id, case_id, agency_id=_user_agency(ctx))
         else:
             # Cold path (no active case): preserve analysis_status per case
             # so case_list_response doesn't render every case as "not run,
@@ -106,7 +107,8 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
             # and the legacy LLM-wrapper rephrased the message dropping the
             # case name (live evidence 2026-05-02: Test Files with 18
             # completed runs rendered as "пустое дело без файлов и анализа").
-            all_cases = (await queries.get_cases(user_id))[:20]
+            all_cases = (await queries.get_cases(
+                user_id, agency_id=_user_agency(ctx)))[:20]
             data = {"cases": [
                 {"id": c.get("id"),
                  "name": c.get("name", ""),
@@ -196,7 +198,7 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     _history = getattr(ctx, "history", None) or []
     case_id, resolution = await resolve_case_id(
         user_id, message, panel_case_id, skeleton_case_id,
-        history=_history,
+        history=_history, agency_id=_user_agency(ctx),
     )
 
     # Pull the per-case summary (separate cache slot per case_id).
