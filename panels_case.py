@@ -72,6 +72,45 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
             ),
         ])
 
+    # ── Confirm Delete (mirrors view="create": rendered only on demand) ───
+    # The Dialog opens immediately when rendered, so we DON'T render it on the
+    # normal case view — a first button press sets view="confirm_delete" and
+    # only then does this branch draw the confirm Dialog. Admin-gated (same
+    # check as Settings) so a non-admin can never reach a destructive Call.
+    if view == "confirm_delete":
+        if not is_admin:
+            return ui.Alert(title="Admin Only",
+                            message="Deleting a case requires the Sharelock admin role.",
+                            type="info")
+        api_case = await _get_api_case(ctx, case_id)
+        api_case_id = _resolve_api_case_id(api_case)
+        back_to_case = ui.Call("__panel__dashboard", tab="analysis",
+                               section="", view="", case_id=case_id)
+        if api_case_id is None:
+            return ui.Stack(children=[
+                ui.Alert(title="Not Registered",
+                         message="This folder is not a registered case — nothing to delete.",
+                         type="info"),
+                ui.Button(label="← Back", variant="ghost", size="sm",
+                          on_click=back_to_case),
+            ])
+        case_name = api_case.get("name") or case_id
+        return ui.Stack(children=[
+            ui.Dialog(
+                title="Delete case",
+                content=ui.Text(
+                    f"Delete case '{case_name}'? This moves it to deleted "
+                    f"and cleans evidence files."),
+                confirm_label="Delete",
+                cancel_label="Cancel",
+                on_confirm=ui.Call("delete_case", case_id=api_case_id),
+            ),
+            # Explicit Cancel: ui.Dialog has no on_cancel, so give the user a
+            # way back to the case (clears view) without deleting.
+            ui.Button(label="Cancel", variant="ghost", size="sm",
+                      on_click=back_to_case),
+        ])
+
     # ── Admin Settings (no case selection required) ───────────────────────
     if tab == "settings":
         if not is_admin:
@@ -117,6 +156,18 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
             size="sm",
             on_click=ui.Call("__panel__dashboard", tab=tid, section="",
                              view="", case_id=case_id),
+        ))
+
+    # Delete case (admin only): does NOT delete on click — routes to the
+    # confirm_delete view (one extra confirm step before the destructive Call).
+    if is_admin:
+        tab_buttons.append(ui.Button(
+            label="Delete case",
+            variant="danger",
+            size="sm",
+            icon="Trash2",
+            on_click=ui.Call("__panel__dashboard", view="confirm_delete",
+                             tab="", section="", case_id=case_id),
         ))
 
     # ── Tab Content ───────────────────────────────────────────────────────

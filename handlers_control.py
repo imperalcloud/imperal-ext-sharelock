@@ -163,6 +163,10 @@ async def fn_delete_case(ctx, params: DeleteCaseParams) -> ActionResult:
             data={"deleted": deleted, "case_id": case_id, "title": case_name,
                   "note": note},
             summary=(f"Case **{case_name}** (ID: {case_id}) deleted — {note}."),
+            # Re-render the Case Details panel: the case is now status='deleted'
+            # and the listing filters it out, so the panel falls back to the
+            # no-case view (the case vanishes from the sidebar).
+            refresh_panels=["dashboard"],
         )
     except CasesAPIError as e:
         return ActionResult.error(f"Delete failed: {e.detail or e}", retryable=False)
