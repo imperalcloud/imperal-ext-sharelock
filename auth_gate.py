@@ -114,6 +114,37 @@ async def _fetch_unlock(ctx) -> UnlockState:
     return state
 
 
+def _agency_consistent(ctx, state: UnlockState) -> bool:
+    """True iff the unlock row's agency matches the kernel identity's agency.
+
+    Multi-agency seam (Track C final-review IMPORTANT-1): an unlock record
+    minted under one agency must not open surfaces for an identity the
+    kernel attributes to another agency. Today all agencies are "default",
+    so this is a zero-behavior-change invariant lock. Mismatch fails CLOSED.
+    """
+    user = getattr(ctx, "user", None)
+    kernel_agency = str(getattr(user, "agency_id", "") or "default") if user else "default"
+    if state.agency_id == kernel_agency:
+        return True
+    log.warning(
+        "unlock agency mismatch: unlock=%s kernel=%s user=%s — "
+        "failing closed (one-canon rule)",
+        state.agency_id, kernel_agency,
+        str(getattr(user, "imperal_id", "") or "") if user else "",
+    )
+    return False
+
+
+async def unlock_ok(ctx) -> bool:
+    """Unlocked AND agency-consistent — the single check skeleton/panels use.
+
+    Wraps ``_fetch_unlock`` + ``_agency_consistent`` so panel/skeleton call
+    sites cannot forget the cross-agency check.
+    """
+    state = await _fetch_unlock(ctx)
+    return state.unlocked and _agency_consistent(ctx, state)
+
+
 def locked_fact() -> dict:
     """The locked-state SDL fact as a plain dict (skeleton/panels reuse it)."""
     return LockedState().model_dump()
@@ -152,7 +183,7 @@ def require_unlock(fn):
     @functools.wraps(fn)
     async def wrapper(ctx, *args, **kwargs):
         state = await _fetch_unlock(ctx)
-        if not state.unlocked:
+        if not (state.unlocked and _agency_consistent(ctx, state)):
             return locked_result()
         return await fn(ctx, *args, **kwargs)
     return wrapper

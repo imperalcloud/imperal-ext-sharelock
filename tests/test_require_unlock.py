@@ -43,8 +43,10 @@ def _locked(monkeypatch):
 
 
 def _unlocked(monkeypatch):
+    # agency_id matches _User.agency_id — the gate also cross-checks the
+    # unlock row's agency against the kernel identity (one-canon rule).
     async def fake(ctx):
-        return UnlockState(unlocked=True, agency_id="agency-x", role="admin")
+        return UnlockState(unlocked=True, agency_id="default", role="admin")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 
 
@@ -162,9 +164,14 @@ def test_all_chat_tools_gated():
 
 
 def test_skeleton_and_panels_gated():
-    assert "_fetch_unlock" in _src("skeleton.py"), "skeleton must check unlock"
-    assert "_fetch_unlock" in _src("panels.py"), "sidebar panel must check unlock"
-    assert "_fetch_unlock" in _src("panels_case.py"), "dashboard panel must check unlock"
+    # skeleton + sidebar use the combined unlock_ok (fetch + agency check);
+    # the dashboard panel needs role, so it fetches state and checks both.
+    assert "unlock_ok" in _src("skeleton.py"), "skeleton must check unlock"
+    assert "unlock_ok" in _src("panels.py"), "sidebar panel must check unlock"
+    src_case = _src("panels_case.py")
+    assert "_fetch_unlock" in src_case, "dashboard panel must check unlock"
+    assert "_agency_consistent" in src_case, \
+        "dashboard panel must cross-check unlock agency vs kernel agency"
 
 
 def test_no_error_result_and_no_ui_dict_in_gate():

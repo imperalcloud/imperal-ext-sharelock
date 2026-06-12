@@ -1,8 +1,14 @@
 """
-Sharelock v2 — Cases API HTTP client.
+Sharelock v2 — Cases API HTTP client (core case/file/analysis surface).
 
-All HTTP calls to the Cases API (66.78.41.10:8096) go through this module.
-No other module should import httpx or make direct HTTP calls to Cases API.
+All HTTP calls to the Cases API (66.78.41.10:8096) go through the queries
+family. No other module should import httpx or make direct HTTP calls to
+Cases API. This module stays the single import door: it re-exports the
+transport helpers (queries_http), the analysis read surface
+(queries_analysis) and the collaboration/auth/agency surface
+(queries_collab), so every ``queries.<fn>`` call site — and test
+monkeypatching via ``queries.<fn>`` — works unchanged after the Rule-6
+split (2026-06-12).
 
 Agency scoping (rollout 2026-04-18):
 -----------------------------------
@@ -14,98 +20,39 @@ behaviour — Cases API logs a warning but does not fail.
 """
 import logging
 from typing import Optional
-from urllib.parse import quote
 
-import httpx
-
-from app import CASES_API_URL, CASES_API_KEY
+from queries_http import (  # noqa: F401 — re-export: transport + error type
+    CasesAPIError,
+    _delete,
+    _get,
+    _hdrs,
+    _post,
+    _put,
+    _raise_for_error,
+)
+from queries_analysis import (  # noqa: F401 — re-export: analysis artifacts
+    get_audit_log,
+    get_graph,
+    get_latest_active_run,
+    get_run,
+    get_taxonomy,
+    list_entities,
+    list_gaps,
+    list_inspections,
+    list_runs,
+    list_summaries,
+    post_gap_decision,
+)
+from queries_collab import (  # noqa: F401 — re-export: shares/unlock/agency
+    delete_share,
+    get_agency_storage,
+    get_shares,
+    get_unlock,
+    post_share,
+    put_agency_storage,
+)
 
 log = logging.getLogger("sharelock-v2.queries")
-
-_BASE_HEADERS = {"x-api-key": CASES_API_KEY, "Content-Type": "application/json"}
-_TIMEOUT = 60.0
-
-
-def _hdrs(agency_id: Optional[str] = None) -> dict:
-    """Build request headers. Attaches X-Imperal-Agency-ID if supplied.
-
-    Never raises on None — rollout tolerates missing agency_id and the Cases
-    API logs a warning server-side.
-    """
-    h = dict(_BASE_HEADERS)
-    if agency_id:
-        h["X-Imperal-Agency-ID"] = str(agency_id)
-    return h
-
-
-class CasesAPIError(Exception):
-    """Cases API returned non-2xx. `status` is HTTP status; `detail` is best-effort detail."""
-
-    def __init__(self, status: int, detail: str = ""):
-        self.status = status
-        self.detail = detail
-        super().__init__(f"Cases API {status}: {detail}")
-
-
-def _raise_for_error(r: httpx.Response) -> None:
-    """Shared 4xx/5xx -> CasesAPIError translation for write helpers."""
-    if r.status_code >= 400:
-        detail = ""
-        try:
-            detail = r.json().get("detail", "")
-        except Exception:
-            detail = r.text[:200]
-        raise CasesAPIError(r.status_code, detail)
-
-
-async def _get(path: str, agency_id: Optional[str] = None):
-    """GET helper. Returns JSON or empty list/dict on 404."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.get(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id))
-        if r.status_code == 404:
-            return [] if "?" in path else {}
-        r.raise_for_status()
-        return r.json()
-
-
-async def _post(path: str, data: dict | None = None, params: dict | None = None,
-                agency_id: Optional[str] = None,
-                extra_headers: dict | None = None):
-    """POST helper. Raises CasesAPIError on 4xx/5xx.
-
-    ``extra_headers`` rides per-call headers (e.g. X-Imperal-User-ID for
-    share grants) on top of the api-key + agency headers.
-    """
-    headers = _hdrs(agency_id)
-    if extra_headers:
-        headers.update(extra_headers)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.post(
-            f"{CASES_API_URL}{path}",
-            headers=headers,
-            json=data or {},
-            params=params or None,
-        )
-        _raise_for_error(r)
-        return r.json()
-
-
-async def _put(path: str, data: dict | None = None,
-               agency_id: Optional[str] = None):
-    """PUT helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.put(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
-                        json=data or {})
-        _raise_for_error(r)
-        return r.json()
-
-
-async def _delete(path: str, agency_id: Optional[str] = None):
-    """DELETE helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.delete(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id))
-        _raise_for_error(r)
-        return r.json()
 
 
 # ── Cases ─────────────────────────────────────────────────────────────────────
@@ -166,107 +113,6 @@ async def cancel_analysis(case_id: int, actor: str, reason: str = "user_cancelle
     )
 
 
-async def list_runs(case_id: int, agency_id: Optional[str] = None) -> list:
-    """List all analysis runs for a case, newest version first."""
-    resp = await _get(f"/cases/{case_id}/runs", agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-async def get_run(case_id: int, run_id: int, agency_id: Optional[str] = None) -> dict:
-    """Fetch a single run."""
-    return await _get(f"/cases/{case_id}/runs/{run_id}", agency_id=agency_id)
-
-
-async def list_gaps(case_id: int, run_id: int | None = None,
-                    agency_id: Optional[str] = None) -> list:
-    """List gaps (BLOCKING→QUALITY→INFORMATIONAL)."""
-    path = f"/cases/{case_id}/analysis/gaps"
-    if run_id is not None:
-        path += f"?run_id={run_id}"
-    resp = await _get(path, agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-async def post_gap_decision(case_id: int, run_id: int, decision: str,
-                            reasoning: str | None = None,
-                            agency_id: Optional[str] = None) -> dict:
-    """Signal gap decision: continue | cancel | add_evidence."""
-    body: dict = {"run_id": run_id, "decision": decision}
-    if reasoning:
-        body["reasoning"] = reasoning
-    return await _post(f"/cases/{case_id}/analysis/gaps/decision", body,
-                       agency_id=agency_id)
-
-
-# ── Graph / Taxonomy ──────────────────────────────────────────────────────────
-
-
-async def get_graph(case_id: int, max_nodes: int = 200, min_mentions: int = 1,
-                    agency_id: Optional[str] = None) -> dict:
-    """Cytoscape graph for a case."""
-    path = f"/cases/{case_id}/graph?max_nodes={max_nodes}&min_mentions={min_mentions}"
-    resp = await _get(path, agency_id=agency_id)
-    return resp if isinstance(resp, dict) else {}
-
-
-async def get_taxonomy(case_id: int, agency_id: Optional[str] = None) -> list:
-    """OSAC taxonomy rows: category, subcategory, file_count, total_size."""
-    resp = await _get(f"/cases/{case_id}/taxonomy", agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Members ───────────────────────────────────────────────────────────────────
-
-
-async def get_members(case_id: int, agency_id: Optional[str] = None) -> list:
-    """Get case team members."""
-    resp = await _get(f"/cases/{case_id}/members", agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Shares (Track C.2 — per-case grants within the agency) ───────────────────
-
-
-async def post_share(case_id: int, imperal_id: str, granted_by: str,
-                     agency_id: Optional[str] = None) -> dict:
-    """Grant a colleague access to a case (POST /cases/{id}/share).
-
-    The Cases API stores the grant keyed by ``imperal_id`` VERBATIM and
-    records ``granted_by`` from the X-Imperal-User-ID header.
-    """
-    return await _post(
-        f"/cases/{case_id}/share",
-        {"imperal_id": imperal_id},
-        agency_id=agency_id,
-        extra_headers={"X-Imperal-User-ID": str(granted_by or "service")[:64]},
-    )
-
-
-async def delete_share(case_id: int, imperal_id: str,
-                       agency_id: Optional[str] = None) -> dict:
-    """Revoke a grant (DELETE /cases/{id}/share/{imperal_id}).
-
-    Returns ``{"ok": True, "deleted": 0|1}`` — deleted=0 means no grant
-    existed for that imperal_id.
-    """
-    return await _delete(
-        f"/cases/{case_id}/share/{quote(str(imperal_id), safe='')}",
-        agency_id=agency_id,
-    )
-
-
-async def get_shares(case_id: int, agency_id: Optional[str] = None) -> dict:
-    """Share grants for a case (GET /cases/{id}/shares).
-
-    Returns ``{"case_id", "owner": {imperal_id,email,name}|None,
-    "shares": [{imperal_id, granted_by, created_at, email, name}]}``.
-    """
-    resp = await _get(f"/cases/{case_id}/shares", agency_id=agency_id)
-    if isinstance(resp, dict) and resp:
-        return resp
-    return {"case_id": case_id, "owner": None, "shares": []}
-
-
 # ── Report ────────────────────────────────────────────────────────────────────
 
 
@@ -278,111 +124,3 @@ async def sign_report_url(
     params = {"run_id": run_id, "format": fmt, "ttl": ttl}
     return await _post(f"/cases/{case_id}/report/sign", data=None, params=params,
                        agency_id=agency_id)
-
-
-# ── Summaries (V3 grounded analysis) ──────────────────────────────────────────
-
-
-async def list_summaries(case_id: int, run_id: int | None = None,
-                         agency_id: Optional[str] = None) -> list:
-    """List category summaries for a run."""
-    path = f"/cases/{case_id}/summaries"
-    if run_id is not None:
-        path += f"?run_id={run_id}"
-    resp = await _get(path, agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Entities ──────────────────────────────────────────────────────────────────
-
-
-async def list_entities(case_id: int, limit: int = 50,
-                        type_filter: str | None = None,
-                        min_mentions: int = 0,
-                        agency_id: Optional[str] = None) -> list:
-    """List entities ordered by mention_count DESC."""
-    params = [f"limit={limit}"]
-    if type_filter:
-        params.append(f"type={type_filter}")
-    if min_mentions > 0:
-        params.append(f"min_mentions={min_mentions}")
-    path = f"/cases/{case_id}/entities?" + "&".join(params)
-    resp = await _get(path, agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Inspections (V3 per-file forensic extraction) ─────────────────────────────
-
-
-async def list_inspections(case_id: int, limit: int = 500, offset: int = 0,
-                           category: str | None = None,
-                           subcategory: str | None = None,
-                           agency_id: Optional[str] = None) -> list:
-    """List file_inspections rows for a case."""
-    params = [f"limit={limit}", f"offset={offset}"]
-    if category:
-        params.append(f"category={category}")
-    if subcategory:
-        params.append(f"subcategory={subcategory}")
-    path = f"/cases/{case_id}/inspections?" + "&".join(params)
-    resp = await _get(path, agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Audit log ─────────────────────────────────────────────────────────────────
-
-
-async def get_audit_log(case_id: int, limit: int = 50,
-                        agency_id: Optional[str] = None) -> list:
-    """Paginated audit events (chronological order, oldest first)."""
-    resp = await _get(f"/cases/{case_id}/audit?limit={limit}", agency_id=agency_id)
-    return resp if isinstance(resp, list) else []
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-async def get_latest_active_run(case_id: int, agency_id: Optional[str] = None) -> dict:
-    """Return the latest run for a case (or {} if none). Newest first by version."""
-    runs = await list_runs(case_id, agency_id=agency_id)
-    return runs[0] if runs else {}
-
-
-# ── Auth unlock (Track A login) ───────────────────────────────────────────────
-
-
-async def get_unlock(imperal_id: str) -> dict:
-    """Live Sharelock unlock state for an imperal_id (service-key gated).
-
-    Returns ``{"unlocked": bool, "agency_id": str, "role": str}`` —
-    consumed by auth_gate._fetch_unlock (the @require_unlock gate).
-    """
-    resp = await _get(f"/auth/unlock/{imperal_id}")
-    return resp if isinstance(resp, dict) else {"unlocked": False}
-
-
-# ── Agency storage settings (Track B) ─────────────────────────────────────────
-
-
-async def get_agency_storage(agency_id: str) -> dict:
-    """Decrypted per-agency storage settings from the Cases API.
-
-    ``{"configured": False}`` when the agency has no row — callers fall
-    back to the NC_* env (default-agency storage). Credentials in the
-    response are held in-process only (files.get_agency_backend);
-    NEVER write them into ctx.cache.
-    """
-    resp = await _get(f"/agency/{agency_id}/storage")
-    return resp if isinstance(resp, dict) else {"configured": False}
-
-
-async def put_agency_storage(agency_id: str, body: dict) -> dict:
-    """Replace per-agency settings (PUT /agency/{agency_id}/storage).
-
-    The Cases API REPLACES the whole encrypted blob — callers MUST merge
-    with ``get_agency_storage()`` first (handlers_admin owns that merge;
-    an empty submitted secret means keep-existing). Body shape:
-    ``{"storage": {"backend": "nextcloud", "nextcloud": {url, username,
-    password, base_path}}, "database"?: {...}, "updated_by"?: str}``.
-    """
-    return await _put(f"/agency/{agency_id}/storage", body)

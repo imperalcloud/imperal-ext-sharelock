@@ -23,6 +23,15 @@ import queries
 log = logging.getLogger("sharelock-v2.files")
 
 
+def parse_dav_xml(text: str):
+    """Parse a WebDAV response defensively: DTDs have no business in DAV
+    multistatus bodies — reject before parsing (billion-laughs/XXE hygiene;
+    storage backends may be customer-hosted = semi-trusted)."""
+    if "<!DOCTYPE" in text or "<!ENTITY" in text:
+        raise ValueError("DAV response contains DTD/entity declarations")
+    return ElementTree.fromstring(text)
+
+
 @dataclass
 class FileInfo:
     name: str
@@ -91,7 +100,7 @@ class NextcloudWebDAV(StorageBackend):
             r.raise_for_status()
 
         ns = {"d": "DAV:"}
-        root = ElementTree.fromstring(r.text)
+        root = parse_dav_xml(r.text)
         files = []
         for resp in root.findall("d:response", ns):
             href = resp.findtext("d:href", "", ns)

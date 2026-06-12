@@ -1,10 +1,13 @@
 """
 Sharelock v2 — Input validation + Nextcloud helpers.
 
-Pure helpers: no Extension / chat imports. Safe to import from handlers or
-any panel module.
+No Extension / chat object registration here — safe to import from handlers
+or any panel module. (Imports files for the shared DTD-rejecting DAV XML
+parse; module-level per the no-lazy-local-imports rule.)
 """
 import logging
+
+from files import parse_dav_xml
 
 log = logging.getLogger("sharelock-v2.validation")
 
@@ -72,7 +75,6 @@ async def list_top_folders(backend) -> list[str]:
     """
     try:
         import httpx
-        from xml.etree import ElementTree
         from urllib.parse import unquote
         if not backend.url or not backend.user:
             return []
@@ -86,7 +88,7 @@ async def list_top_folders(backend) -> list[str]:
             if r.status_code >= 300:
                 return []
         ns = {"d": "DAV:"}
-        root = ElementTree.fromstring(r.text)
+        root = parse_dav_xml(r.text)
         base = backend.base_path.strip("/").split("/")[-1]
         out: list[str] = []
         for resp in root.findall("d:response", ns):

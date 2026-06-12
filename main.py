@@ -13,10 +13,11 @@ if _dir not in sys.path:
     sys.path.insert(0, _dir)
 
 _MODULES = (
-    "app", "queries", "chat", "skeleton", "validation",
+    "app", "queries", "queries_http", "queries_collab", "queries_analysis",
+    "chat", "skeleton", "validation",
     "handlers", "handlers_analysis",
     "handlers_share", "handlers_files", "handlers_admin",
-    "files", "panels", "panels_case", "panels_analysis",
+    "files", "panels", "panels_case", "panels_case_tabs", "panels_analysis",
     "panels_gap_review", "panels_graph",
     "panels_share", "panels_settings",
     "intelligence_context", "intelligence_format",
@@ -41,6 +42,7 @@ import handlers_admin  # noqa: E402, F401 — save_agency_settings chat tool (ad
 import skeleton  # noqa: E402, F401 — registers @ext.skeleton section
 import panels  # noqa: E402, F401 — registers left panel
 import panels_case  # noqa: E402, F401 — registers right panel
+import panels_case_tabs  # noqa: E402, F401 — tab builders (used by panels_case)
 import panels_analysis  # noqa: E402, F401 — progress builders (used by panels_case)
 import panels_gap_review  # noqa: E402, F401 — gap review builder
 import panels_graph  # noqa: E402, F401 — graph builder

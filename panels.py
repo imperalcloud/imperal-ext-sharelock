@@ -9,12 +9,12 @@ import logging
 from urllib.parse import unquote, quote
 
 import httpx
-from xml.etree import ElementTree
 
 from imperal_sdk import ui
 from app import ext, _user_id, _user_agency
-from auth_gate import _fetch_unlock, locked_panel
+from auth_gate import locked_panel, unlock_ok
 import files
+from files import parse_dav_xml  # DTD/entity-rejecting DAV XML parse (XXE hygiene)
 from cache_models import (
     NextcloudFolderListing,
     NextcloudFileListing,
@@ -221,7 +221,7 @@ async def _list_nc_folders(backend) -> list[str]:
             if r.status_code >= 300:
                 return []
         ns = {"d": "DAV:"}
-        root = ElementTree.fromstring(r.text)
+        root = parse_dav_xml(r.text)
         folders = []
         for resp in root.findall("d:response", ns):
             href = unquote(resp.findtext("d:href", "", ns)).rstrip("/")
@@ -255,7 +255,7 @@ async def _list_nc_files_recursive(backend, folder: str) -> list[dict]:
             if r.status_code >= 300:
                 return []
         ns = {"d": "DAV:"}
-        root = ElementTree.fromstring(r.text)
+        root = parse_dav_xml(r.text)
         # Decode the base href for comparison
         base_decoded = unquote(url.split(backend.url)[-1]).rstrip("/")
         files = []
@@ -283,7 +283,7 @@ async def _list_nc_files_recursive(backend, folder: str) -> list[dict]:
            default_width=300, min_width=240, max_width=400)
 async def panel_sidebar(ctx, section: str = "", **kwargs):
     """Left panel: Nextcloud folders as cases + recursive file list."""
-    if not (await _fetch_unlock(ctx)).unlocked:
+    if not await unlock_ok(ctx):
         return locked_panel()
     user_id = _user_id(ctx)
     active_folder = section or ""

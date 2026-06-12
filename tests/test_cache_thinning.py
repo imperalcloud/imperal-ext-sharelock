@@ -28,7 +28,8 @@ def test_small_list_untouched_and_existing_count_kept():
 
 
 def test_both_summary_loaders_use_the_shared_trim():
-    for fname in ("handlers.py", "panels_case.py"):
+    # panel summary loader moved to panels_case_tabs.py (Rule-6 split).
+    for fname in ("handlers.py", "panels_case_tabs.py"):
         with open(os.path.join(_ROOT, fname)) as f:
             src = f.read()
         assert "thin_case_summary_data" in src, f"{fname} must use the shared trim"
