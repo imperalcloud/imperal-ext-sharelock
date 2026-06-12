@@ -92,7 +92,11 @@ async def fn_get_report(ctx, params: GetReportParams) -> ActionResult:
         # analysis record's run, else the latest run.
         run_id = case.get("active_run_id")
         analysis = await queries.get_analysis(case_id, agency_id=agency)
-        a_status = (analysis or {}).get("status") or (analysis or {}).get("analysis_status")
+        # /cases/{id}/analysis returns BOTH `analysis_status` (the analysis
+        # lifecycle = "completed") and `status` (the CASE lifecycle = "active").
+        # Read `analysis_status` FIRST — reading `status` first wrongly reports
+        # "no completed analysis" for an active case with a finished analysis.
+        a_status = (analysis or {}).get("analysis_status") or (analysis or {}).get("status")
         if not run_id:
             run_id = (analysis or {}).get("active_run_id")
         if not run_id:

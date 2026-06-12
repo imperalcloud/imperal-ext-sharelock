@@ -245,6 +245,48 @@ def test_get_report_signs_url(monkeypatch):
     assert res.data["available"] is True
 
 
+def test_get_report_prefers_analysis_status_over_case_status(monkeypatch):
+    """Precedence guard: /cases/{id}/analysis returns BOTH `status`
+    (case lifecycle = 'active') and `analysis_status` (= 'completed').
+    get_report must read `analysis_status` FIRST, otherwise it wrongly
+    reports 'no completed analysis' for an active case whose analysis is
+    finished. Mirrors live case 3812 / run 21522."""
+    import handlers_control
+    import queries
+    _unlock(monkeypatch)
+
+    async def case(case_id, agency_id=None):
+        # active_run_id is set; case status is the lifecycle 'active'
+        return {"id": case_id, "name": "Case 3812",
+                "active_run_id": 21522, "status": "active"}
+
+    async def analysis(case_id, agency_id=None):
+        # the precedence trap: status='active' (case) BEFORE
+        # analysis_status='completed' (analysis)
+        return {"status": "active", "analysis_status": "completed",
+                "active_run_id": 21522}
+
+    async def latest(case_id, agency_id=None):
+        return {"run_id": 21522, "status": "completed", "version": 1}
+
+    async def sign(case_id, run_id, fmt="pdf", ttl=600, agency_id=None):
+        assert run_id == 21522
+        return {"url": "https://api/report/signed?sig=xyz", "expires_in": 600}
+    monkeypatch.setattr(queries, "get_case", case)
+    monkeypatch.setattr(queries, "get_analysis", analysis)
+    monkeypatch.setattr(queries, "get_latest_active_run", latest)
+    monkeypatch.setattr(queries, "sign_report_url", sign)
+
+    res = asyncio.run(handlers_control.fn_get_report(
+        _Ctx(), handlers_control.GetReportParams(case_id=3812)))
+    assert res.status == "success"
+    assert res.data["available"] is True, (
+        "completed analysis on an active case MUST yield a signed report — "
+        "analysis_status must win over case status")
+    assert res.data["url"].startswith("https://")
+    assert res.data["run_id"] == 21522
+
+
 def test_delete_case_calls_api(monkeypatch):
     import handlers_control
     import queries
