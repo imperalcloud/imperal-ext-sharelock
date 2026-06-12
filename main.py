@@ -17,11 +17,12 @@ _MODULES = (
     "chat", "skeleton", "validation",
     "handlers", "handlers_analysis",
     "handlers_share", "handlers_files", "handlers_admin",
+    "handlers_control", "handlers_drilldown", "handlers_intel",
     "files", "panels", "panels_case", "panels_case_tabs", "panels_analysis",
     "panels_gap_review", "panels_graph",
     "panels_share", "panels_settings",
     "intelligence_context", "intelligence_format",
-    "cache_models", "models_share",
+    "cache_models", "models_share", "models_drilldown", "models_lists",
 )
 for _m in [k for k in sys.modules if k in _MODULES]:
     del sys.modules[_m]
@@ -39,6 +40,9 @@ import handlers_analysis  # noqa: E402, F401 — run/cancel/gap chat tools
 import handlers_share  # noqa: E402, F401 — share/unshare/list-shares chat tools
 import handlers_files  # noqa: E402, F401 — upload_case_files chat tool
 import handlers_admin  # noqa: E402, F401 — save_agency_settings chat tool (admin)
+import handlers_control  # noqa: E402, F401 — get_report + deletes + update_case (Track D)
+import handlers_drilldown  # noqa: E402, F401 — D4 read drill-down (files/detail/status/graph/entities)
+import handlers_intel  # noqa: E402, F401 — D4 intel drill-down (rel/events/taxonomy/audit/runs)
 import skeleton  # noqa: E402, F401 — registers @ext.skeleton section
 import panels  # noqa: E402, F401 — registers left panel
 import panels_case  # noqa: E402, F401 — registers right panel

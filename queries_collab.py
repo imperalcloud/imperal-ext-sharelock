@@ -13,7 +13,7 @@ import logging
 from typing import Optional
 from urllib.parse import quote
 
-from queries_http import _delete, _get, _post, _put
+from queries_http import _delete, _get, _patch, _post, _put
 
 log = logging.getLogger("sharelock-v2.queries")
 
@@ -59,6 +59,44 @@ async def get_shares(case_id: int, agency_id: Optional[str] = None) -> dict:
     if isinstance(resp, dict) and resp:
         return resp
     return {"case_id": case_id, "owner": None, "shares": []}
+
+
+# ── Case lifecycle writes (Track D — delete / rename) ─────────────────────────
+
+
+async def delete_case(case_id: int, agency_id: Optional[str] = None) -> dict:
+    """Delete a case (DELETE /cases/{case_id}).
+
+    The Cases API moves the case to deleted state and cleans the evidence
+    files. Returns the API body (``{"deleted": True}`` or similar); callers
+    treat a 2xx as success.
+    """
+    resp = await _delete(f"/cases/{case_id}", agency_id=agency_id)
+    return resp if isinstance(resp, dict) else {"deleted": True}
+
+
+async def update_case(case_id: int, name: Optional[str] = None,
+                      description: Optional[str] = None,
+                      agency_id: Optional[str] = None) -> dict:
+    """Rename / re-describe a case (PATCH /cases/{case_id}, body=CaseUpdate).
+
+    Only the supplied fields are sent — the Cases API ``CaseUpdate`` body has
+    optional ``name`` / ``description``. Returns the updated case row.
+    """
+    body: dict = {}
+    if name is not None:
+        body["name"] = name
+    if description is not None:
+        body["description"] = description
+    resp = await _patch(f"/cases/{case_id}", body, agency_id=agency_id)
+    return resp if isinstance(resp, dict) else {}
+
+
+async def delete_file(case_id: int, file_id: int,
+                      agency_id: Optional[str] = None) -> dict:
+    """Delete one evidence file from a case (DELETE /cases/{id}/files/{file_id})."""
+    resp = await _delete(f"/cases/{case_id}/files/{file_id}", agency_id=agency_id)
+    return resp if isinstance(resp, dict) else {"deleted": True}
 
 
 # ── Auth unlock (Track A login) ───────────────────────────────────────────────

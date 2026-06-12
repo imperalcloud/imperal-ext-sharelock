@@ -15,7 +15,9 @@ from pathlib import Path
 _EXT_ROOT = Path(__file__).resolve().parent.parent
 _HANDLER_FILES = ["handlers.py", "handlers_analysis.py",
                   "handlers_share.py", "handlers_files.py",
-                  "handlers_admin.py"]
+                  "handlers_admin.py",
+                  "handlers_control.py", "handlers_drilldown.py",
+                  "handlers_intel.py"]
 
 _WRITE_ACTION_TYPES = {"write", "destructive"}
 

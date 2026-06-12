@@ -26,7 +26,10 @@ _SURFACE = (
     "list_entities", "list_inspections", "get_audit_log",
     "post_share", "delete_share", "get_shares",
     "get_unlock", "get_agency_storage", "put_agency_storage",
-    "CasesAPIError", "_get", "_post", "_put", "_delete",
+    # Track D additions (delete/update writes + drill-down reads)
+    "delete_case", "update_case", "delete_file",
+    "get_entity", "list_relationships", "list_events", "verify_audit",
+    "CasesAPIError", "_get", "_post", "_put", "_patch", "_delete",
     "_hdrs", "_raise_for_error",
 )
 
@@ -44,8 +47,14 @@ def test_reexports_are_the_same_objects():
     assert queries.list_runs is queries_analysis.list_runs
     assert queries.get_latest_active_run is queries_analysis.get_latest_active_run
     assert queries.list_inspections is queries_analysis.list_inspections
+    assert queries.delete_case is queries_collab.delete_case
+    assert queries.update_case is queries_collab.update_case
+    assert queries.get_entity is queries_analysis.get_entity
+    assert queries.list_relationships is queries_analysis.list_relationships
+    assert queries.verify_audit is queries_analysis.verify_audit
     assert queries.CasesAPIError is queries_http.CasesAPIError
     assert queries._get is queries_http._get
+    assert queries._patch is queries_http._patch
 
 
 def test_direct_import_no_circular_crash_any_order():

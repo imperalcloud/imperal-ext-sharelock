@@ -110,6 +110,32 @@ async def list_entities(case_id: int, limit: int = 50,
     return resp if isinstance(resp, list) else []
 
 
+async def get_entity(case_id: int, entity_id: int,
+                     agency_id: Optional[str] = None) -> dict:
+    """Fetch a single entity row (GET /cases/{id}/entities/{entity_id})."""
+    resp = await _get(f"/cases/{case_id}/entities/{entity_id}", agency_id=agency_id)
+    return resp if isinstance(resp, dict) else {}
+
+
+# ── Relationships / Events (V3 intelligence drill-down) ────────────────────────
+
+
+async def list_relationships(case_id: int, limit: int = 50, offset: int = 0,
+                             agency_id: Optional[str] = None) -> list:
+    """List entity relationships (GET /cases/{id}/relationships)."""
+    path = f"/cases/{case_id}/relationships?limit={limit}&offset={offset}"
+    resp = await _get(path, agency_id=agency_id)
+    return resp if isinstance(resp, list) else []
+
+
+async def list_events(case_id: int, limit: int = 50, offset: int = 0,
+                      agency_id: Optional[str] = None) -> list:
+    """List timeline events (GET /cases/{id}/events)."""
+    path = f"/cases/{case_id}/events?limit={limit}&offset={offset}"
+    resp = await _get(path, agency_id=agency_id)
+    return resp if isinstance(resp, list) else []
+
+
 # ── Inspections (V3 per-file forensic extraction) ─────────────────────────────
 
 
@@ -136,3 +162,13 @@ async def get_audit_log(case_id: int, limit: int = 50,
     """Paginated audit events (chronological order, oldest first)."""
     resp = await _get(f"/cases/{case_id}/audit?limit={limit}", agency_id=agency_id)
     return resp if isinstance(resp, list) else []
+
+
+async def verify_audit(case_id: int, agency_id: Optional[str] = None) -> dict:
+    """Verify the audit-trail hash chain (GET /cases/{id}/audit/verify).
+
+    Returns the API verdict dict (e.g. ``{"valid": True, "checked": n}``) —
+    the chain-of-custody integrity proof for forensic admissibility.
+    """
+    resp = await _get(f"/cases/{case_id}/audit/verify", agency_id=agency_id)
+    return resp if isinstance(resp, dict) else {}

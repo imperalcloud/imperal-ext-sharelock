@@ -26,30 +26,38 @@ from queries_http import (  # noqa: F401 — re-export: transport + error type
     _delete,
     _get,
     _hdrs,
+    _patch,
     _post,
     _put,
     _raise_for_error,
 )
 from queries_analysis import (  # noqa: F401 — re-export: analysis artifacts
     get_audit_log,
+    get_entity,
     get_graph,
     get_latest_active_run,
     get_run,
     get_taxonomy,
     list_entities,
+    list_events,
     list_gaps,
     list_inspections,
+    list_relationships,
     list_runs,
     list_summaries,
     post_gap_decision,
+    verify_audit,
 )
 from queries_collab import (  # noqa: F401 — re-export: shares/unlock/agency
+    delete_case,
+    delete_file,
     delete_share,
     get_agency_storage,
     get_shares,
     get_unlock,
     post_share,
     put_agency_storage,
+    update_case,
 )
 
 log = logging.getLogger("sharelock-v2.queries")

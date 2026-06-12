@@ -8,8 +8,9 @@ Contract (plan 2026-06-11-sharelock-trackA-login.md, Task A5):
 - unlock-state read fails CLOSED (Cases API degraded → locked);
 - the decorator preserves introspection (chat.function reads the params
   model from the wrapped signature/annotations);
-- all 15 @chat.function tools + skeleton + both panels are gated
-  (10 original + share/unshare/list-shares/upload/save-settings, C.2 T3);
+- all 30 @chat.function tools + skeleton + both panels are gated
+  (10 core + share/unshare/list-shares/upload/save-settings (C.2 T3) +
+  15 Track-D control/drill-down tools);
 - locked verdicts cache ≤10s (unlocked ≤60s) so a fresh panel sign-in
   takes effect within seconds.
 """
@@ -152,7 +153,10 @@ def test_all_chat_tools_gated():
     gated = 0
     for fname in ("handlers.py", "handlers_analysis.py",
                   "handlers_share.py", "handlers_files.py",
-                  "handlers_admin.py"):
+                  "handlers_admin.py",
+                  # Track D (D2 report / D3 deletes / D4 drill-down)
+                  "handlers_control.py", "handlers_drilldown.py",
+                  "handlers_intel.py"):
         src = _src(fname)
         for m in re.finditer(r"@chat\.function\(", src):
             seg = src[m.start(): src.index("async def", m.start())]
@@ -160,7 +164,11 @@ def test_all_chat_tools_gated():
                 f"{fname}: @chat.function at offset {m.start()} is not gated"
             )
             gated += 1
-    assert gated == 15, f"expected 15 gated chat tools, found {gated}"
+    # 15 original + 15 Track-D (get_report; delete_case/delete_file;
+    # list_case_files/get_case_detail/update_case/analysis_status/
+    # get_intelligence_graph/list_entities/get_entity/list_relationships/
+    # list_timeline_events/get_taxonomy/get_audit_log/list_analysis_runs)
+    assert gated == 30, f"expected 30 gated chat tools, found {gated}"
 
 
 def test_skeleton_and_panels_gated():

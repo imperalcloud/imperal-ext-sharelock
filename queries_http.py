@@ -96,6 +96,16 @@ async def _put(path: str, data: dict | None = None,
         return r.json()
 
 
+async def _patch(path: str, data: dict | None = None,
+                 agency_id: Optional[str] = None):
+    """PATCH helper. Raises CasesAPIError on 4xx/5xx (mirrors _put)."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        r = await c.patch(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
+                          json=data or {})
+        _raise_for_error(r)
+        return r.json()
+
+
 async def _delete(path: str, agency_id: Optional[str] = None):
     """DELETE helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
     async with httpx.AsyncClient(timeout=_TIMEOUT) as c:

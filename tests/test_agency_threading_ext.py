@@ -18,7 +18,11 @@ _QUERY_FNS = ("get_cases", "get_analysis", "get_files", "list_runs",
               "get_run", "get_graph", "get_case", "get_shares",
               "post_share", "delete_share",
               "get_taxonomy", "get_audit_log", "list_summaries",
-              "list_entities", "list_inspections")
+              "list_entities", "list_inspections",
+              # Track D additions (delete/update/drill-down reads)
+              "delete_case", "update_case", "delete_file",
+              "get_entity", "list_relationships", "list_events",
+              "verify_audit")
 
 
 def _src(name):
@@ -35,7 +39,10 @@ def test_no_agency_blind_queries_calls():
                   "panels_gap_review.py", "panels_graph.py", "panels_analysis.py",
                   "panels_share.py",
                   "handlers.py", "handlers_share.py", "handlers_files.py",
-                  "handlers_analysis.py", "intelligence_context.py",
+                  "handlers_analysis.py",
+                  "handlers_control.py", "handlers_drilldown.py",
+                  "handlers_intel.py",
+                  "intelligence_context.py",
                   "skeleton.py", "queries_collab.py", "queries_analysis.py"):
         src = _src(fname)
         for fn in _QUERY_FNS:

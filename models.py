@@ -212,6 +212,40 @@ from models_share import (  # noqa: E402, F401
     SaveSettingsResponse,
 )
 
+# Track D (D2 report / D3 deletes / D4 drill-down) — split into
+# models_drilldown.py (same 300-LOC-ceiling rationale, Rule 6); importers
+# (handlers_control.py / handlers_drilldown.py) keep ``from models import ...``.
+
+from models_drilldown import (  # noqa: E402, F401
+    ReportLink,
+    CaseDeleteReceipt,
+    FileDeleteReceipt,
+    UpdateCaseReceipt,
+    CaseDetail,
+    AnalysisStatus,
+    IntelligenceGraphSummary,
+    EntityRecord,
+)
+
+# D4 list-row types + list responses — split into models_lists.py (same
+# 300-LOC-ceiling rationale, Rule 6).
+
+from models_lists import (  # noqa: E402, F401
+    CaseFileRecord,
+    RelationshipRecord,
+    TimelineEventRecord,
+    TaxonomyRecord,
+    AuditEventRecord,
+    AnalysisRunRecord,
+    CaseFileListResponse,
+    EntityListResponse,
+    RelationshipListResponse,
+    TimelineEventListResponse,
+    TaxonomyListResponse,
+    AuditLogResponse,
+    AnalysisRunListResponse,
+)
+
 __all__ = [
     "CaseRecord",
     "DocSearchHit",
@@ -231,4 +265,25 @@ __all__ = [
     "UnshareCaseResponse",
     "UploadReceipt",
     "SaveSettingsResponse",
+    "ReportLink",
+    "CaseDeleteReceipt",
+    "FileDeleteReceipt",
+    "UpdateCaseReceipt",
+    "CaseDetail",
+    "AnalysisStatus",
+    "IntelligenceGraphSummary",
+    "EntityRecord",
+    "CaseFileRecord",
+    "RelationshipRecord",
+    "TimelineEventRecord",
+    "TaxonomyRecord",
+    "AuditEventRecord",
+    "AnalysisRunRecord",
+    "CaseFileListResponse",
+    "EntityListResponse",
+    "RelationshipListResponse",
+    "TimelineEventListResponse",
+    "TaxonomyListResponse",
+    "AuditLogResponse",
+    "AnalysisRunListResponse",
 ]
