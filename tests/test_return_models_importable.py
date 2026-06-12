@@ -35,6 +35,24 @@ def test_case_list_envelope_contains_case_rows():
     )
 
 
+def test_case_share_list_envelope_contains_share_rows():
+    """CaseShareListResponse is a real sdl.EntityList[CaseShareRecord] —
+    grant rows live in items=[...]; case_id + owner are additive scalars."""
+    from models import CaseShareListResponse, CaseShareRecord
+    fields = CaseShareListResponse.model_fields
+    assert "items" in fields and "case_id" in fields and "owner" in fields
+    assert fields["items"].annotation == list[CaseShareRecord], (
+        f"CaseShareListResponse.items must be list[CaseShareRecord], "
+        f"got {fields['items'].annotation}"
+    )
+    # Raw Cases API rows ride through — canonical id/title derive from
+    # imperal_id/email via the mode='before' validator.
+    rec = CaseShareRecord(imperal_id="imp_u_a", email="a@x.com",
+                          granted_by="imp_u_o", created_at="2026-06-12")
+    assert rec.id == "imp_u_a" and rec.title == "a@x.com"
+    assert rec.kind == "case_share"
+
+
 def test_gap_review_envelope_shape():
     """GapReviewResponse is a real sdl.EntityList[GapReviewItem] — gap rows live in items=[...]; the handler's scalars (case_id/run_id/by_severity/confidence_*) are kept as additive typed fields (SDL migration 2026-06-02; legacy 'gaps' list is now 'items')."""
     from models import GapReviewResponse

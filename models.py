@@ -200,6 +200,18 @@ from models_analysis import (  # noqa: E402, F401
     GapDecisionResponse,
 )
 
+# Share / upload / admin-settings domain — split into models_share.py (same
+# 300-LOC-ceiling rationale); importers keep ``from models import ...``.
+
+from models_share import (  # noqa: E402, F401
+    CaseShareRecord,
+    CaseShareListResponse,
+    ShareCaseResponse,
+    UnshareCaseResponse,
+    UploadReceipt,
+    SaveSettingsResponse,
+)
+
 __all__ = [
     "CaseRecord",
     "DocSearchHit",
@@ -213,4 +225,10 @@ __all__ = [
     "RunAnalysisResponse",
     "CancelAnalysisResponse",
     "GapDecisionResponse",
+    "CaseShareRecord",
+    "CaseShareListResponse",
+    "ShareCaseResponse",
+    "UnshareCaseResponse",
+    "UploadReceipt",
+    "SaveSettingsResponse",
 ]

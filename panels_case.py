@@ -28,6 +28,8 @@ from case_resolver import load_case_data_from_api
 from panels import _cached_user_cases  # circuit-breaker for Cases API panel reads
 from panels_gap_review import build_gap_review
 from panels_graph import build_graph_panel
+from panels_share import build_share_tab
+from panels_settings import build_settings_tab
 
 log = logging.getLogger("sharelock-v2.panels_case")
 
@@ -36,6 +38,7 @@ _TABS = [
     ("gap_review", "Gap Review"),
     ("graph", "Graph"),
     ("report", "Report"),
+    ("share", "Share"),
 ]
 
 
@@ -50,8 +53,10 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
     `case_id` is overwritten here to avoid showing the previous case after
     the user selected a new one.
     """
-    if not (await _fetch_unlock(ctx)).unlocked:
+    unlock = await _fetch_unlock(ctx)
+    if not unlock.unlocked:
         return locked_panel()
+    is_admin = unlock.role == "admin"
 
     if section:
         case_id = section
@@ -71,22 +76,45 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
             ),
         ])
 
+    # ── Admin Settings (no case selection required) ───────────────────────
+    if tab == "settings":
+        if not is_admin:
+            return ui.Alert(title="Admin Only",
+                            message="Agency settings require the Sharelock admin role.",
+                            type="info")
+        try:
+            content = await build_settings_tab(ctx)
+        except Exception as exc:
+            log.error(f"Panel tab 'settings' error: {exc}")
+            content = ui.Alert(title="Error", message=str(exc)[:300], type="error")
+        back = ui.Button(label="← Back", variant="ghost", size="sm",
+                         on_click=ui.Call("__panel__dashboard", tab="analysis",
+                                          section="", view="", case_id=case_id))
+        return ui.Stack(children=[back, content])
+
     # ── No case selected ──────────────────────────────────────────────────
     if not case_id:
-        return ui.Stack(children=[
+        no_case_children = [
             ui.Text("Select a case"),
             ui.Text("Choose a case from the sidebar, or create a new one."),
             ui.Button(label="+ New Case", variant="primary",
                       on_click=ui.Call("__panel__dashboard", view="create",
                                        tab="", section="", case_id="")),
-        ])
+        ]
+        if is_admin:
+            no_case_children.append(ui.Button(
+                label="Agency Settings", variant="ghost", icon="Settings",
+                on_click=ui.Call("__panel__dashboard", tab="settings",
+                                 section="", view="", case_id="")))
+        return ui.Stack(children=no_case_children)
 
     if not tab:
         tab = "analysis"
 
     # ── Tab Bar ───────────────────────────────────────────────────────────
+    tabs = list(_TABS) + ([("settings", "Settings")] if is_admin else [])
     tab_buttons = []
-    for tid, label in _TABS:
+    for tid, label in tabs:
         tab_buttons.append(ui.Button(
             label=label,
             variant="primary" if tid == tab else "ghost",
@@ -105,13 +133,26 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
             content = await _build_graph_tab(ctx, case_id)
         elif tab == "report":
             content = await _build_report_tab(ctx, case_id)
+        elif tab == "share":
+            content = await _build_share_tab(ctx, case_id)
         else:
             content = ui.Text("Unknown tab.")
     except Exception as exc:
         log.error(f"Panel tab '{tab}' error: {exc}")
         content = ui.Alert(title="Error", message=str(exc)[:300], type="error")
 
-    return ui.Stack(children=[ui.Stack(children=tab_buttons, direction="h"), content])
+    children = [ui.Stack(children=tab_buttons, direction="h")]
+    if tab == "analysis":
+        # Evidence dropzone above the analysis content (upload_case_files
+        # fires immediately on file-select with base64 payloads).
+        try:
+            upload = await _build_upload_section(ctx, case_id)
+            if upload is not None:
+                children.append(upload)
+        except Exception as exc:
+            log.warning(f"upload section failed for '{case_id}': {exc}")
+    children.append(content)
+    return ui.Stack(children=children)
 
 
 async def _get_api_case(ctx, folder_name: str) -> dict:
@@ -239,6 +280,33 @@ async def _build_analysis_tab(ctx, folder_name: str):
                 f"Upload documents to Nextcloud and run analysis."),
         ui.Button(label="Run Analysis", variant="primary",
                   on_click=ui.Call("run_analysis", case_id=api_case_id)),
+    ])
+
+
+async def _build_share_tab(ctx, folder_name: str):
+    """Share tab: delegates to panels_share."""
+    api_case = await _get_api_case(ctx, folder_name)
+    api_case_id = _resolve_api_case_id(api_case)
+    if api_case_id is None:
+        return ui.Alert(title="Not Registered",
+                        message="Register this folder as a case first.",
+                        type="info")
+    return await build_share_tab(ctx, api_case_id)
+
+
+async def _build_upload_section(ctx, folder_name: str):
+    """Evidence dropzone above the Analysis tab (None when unregistered —
+    the analysis tab already offers the Register button)."""
+    api_case = await _get_api_case(ctx, folder_name)
+    api_case_id = _resolve_api_case_id(api_case)
+    if api_case_id is None:
+        return None
+    return ui.Section(title="Upload evidence", children=[
+        ui.FileUpload(accept="*", max_size_mb=10, multiple=True,
+                      max_files=8, max_total_mb=25, param_name="files",
+                      on_upload=ui.Call("upload_case_files",
+                                        case_id=api_case_id)),
+        ui.Text("New files are picked up by analysis on the next census run."),
     ])
 
 

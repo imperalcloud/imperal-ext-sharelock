@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.1",
   "app_id": "sharelock-v2",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -1792,6 +1792,1009 @@
           "title"
         ],
         "title": "GapDecisionResponse",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "share_case",
+      "description": "Share an investigation case with a colleague in the same agency by their imperal id (imp_u_...). Pass `colleague` VERBATIM as the user supplied it.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "create:case_share"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID to share",
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "colleague": {
+            "description": "Colleague identifier — their imperal id (imp_u_...). Pass VERBATIM as the user supplied it. Do NOT paraphrase or normalise; the grant is stored keyed by this exact string.",
+            "title": "Colleague",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "colleague"
+        ],
+        "title": "ShareCaseParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "share_case receipt (handlers_share.py: data={\"shared\", \"case_id\",\n\"imperal_id\", \"note\"}). ``note`` is the honesty fact — set when the\nidentifier doesn't look like an imperal id (stored verbatim; server-side\nemail resolution lands later). kind='case_share'.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "case_share",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "shared": {
+            "default": false,
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
+          },
+          "imperal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Imperal Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ShareCaseResponse",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "unshare_case",
+      "description": "Revoke a colleague's access to an investigation case. Pass `colleague` VERBATIM — the imperal id the grant was created with.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "delete:case_share"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID to revoke access on",
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "colleague": {
+            "description": "Colleague identifier the grant was created with (imp_u_...). Pass VERBATIM — revocation matches the stored grant key exactly.",
+            "title": "Colleague",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "colleague"
+        ],
+        "title": "UnshareCaseParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "unshare_case receipt (handlers_share.py: data={\"unshared\", \"deleted\",\n\"case_id\", \"imperal_id\"}). ``deleted`` mirrors the Cases API DELETE\nrowcount — 0 means there was no grant to revoke. kind='case_share'.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "case_share",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "unshared": {
+            "default": false,
+            "title": "Unshared",
+            "type": "boolean"
+          },
+          "deleted": {
+            "default": 0,
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
+          },
+          "imperal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Imperal Id"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "UnshareCaseResponse",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "list_case_shares",
+      "description": "List who an investigation case is shared with — the owner plus every colleague grant (imperal id + email).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "case_id": {
+            "description": "Case ID to list share grants for",
+            "title": "Case Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "CaseSharesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "CaseShareRecord": {
+            "description": "One grant row from list_case_shares.data[\"items\"][] — mirrors the Cases\nAPI GET /cases/{id}/shares ``shares`` rows (imperal_id, granted_by,\ncreated_at + LEFT-JOINed users.email/name, both nullable for grants whose\nimperal_id has no users row yet).\n\nSDL: canonical id <- ``imperal_id``; title <- email|name|imperal_id;\nkind='case_share'.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "case_share",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "imperal_id": {
+                "title": "Imperal Id",
+                "type": "string"
+              },
+              "email": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Email"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Name"
+              },
+              "granted_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Granted By"
+              },
+              "created_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Created At"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "imperal_id"
+            ],
+            "title": "CaseShareRecord",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "list_case_shares return shape — a REAL sdl.EntityList[CaseShareRecord]\n(``items=[...]``). Additive scalars: ``case_id`` + ``owner`` (the case\ncreator row ``{imperal_id, email, name}`` or None).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/CaseShareRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Owner"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CaseShareListResponse",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "upload_case_files",
+      "description": "Upload evidence files into a case's storage folder. Files arrive base64-encoded from the panel uploader; analysis picks them up on the next census run.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "create:file"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "UploadFileItem": {
+            "description": "One file from the panel FileUpload action (raw base64 payload).",
+            "properties": {
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "size": {
+                "default": 0,
+                "title": "Size",
+                "type": "integer"
+              },
+              "mime_type": {
+                "default": "",
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "data_base64": {
+                "default": "",
+                "title": "Data Base64",
+                "type": "string"
+              }
+            },
+            "title": "UploadFileItem",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "case_id": {
+            "description": "Case ID receiving the evidence files",
+            "title": "Case Id",
+            "type": "integer"
+          },
+          "files": {
+            "description": "Files from the panel uploader: name/size/mime_type/data_base64 (raw base64, no data-URI prefix)",
+            "items": {
+              "$ref": "#/$defs/UploadFileItem"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "UploadCaseFilesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "upload_case_files receipt (handlers_files.py: data={\"uploaded\",\n\"case_id\", \"case_name\", \"files\", \"failed\", \"note\"} on success and\ndata={\"uploaded\": 0, \"case_id\", \"files\": [], \"reason\"} on a limit fact —\nlimit violations are SUCCESS facts, not errors). kind='upload_receipt'.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "upload_receipt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "uploaded": {
+            "default": 0,
+            "title": "Uploaded",
+            "type": "integer"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Id"
+          },
+          "case_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Case Name"
+          },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "failed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "UploadReceipt",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "save_agency_settings",
+      "description": "Save per-agency storage (Nextcloud) and optional user-store database settings. Requires the Sharelock admin role; empty fields keep the current values.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "update:agency_settings"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "description": "Settings form fields. Empty string = keep the current stored value\n(the panel form only submits fields the admin actually edited).",
+        "properties": {
+          "storage_url": {
+            "default": "",
+            "description": "Nextcloud URL (empty = keep current)",
+            "title": "Storage Url",
+            "type": "string"
+          },
+          "storage_username": {
+            "default": "",
+            "description": "Storage username (empty = keep current)",
+            "title": "Storage Username",
+            "type": "string"
+          },
+          "storage_password": {
+            "default": "",
+            "description": "Storage password (empty = keep current)",
+            "title": "Storage Password",
+            "type": "string"
+          },
+          "storage_base_path": {
+            "default": "",
+            "description": "Storage base path, e.g. /Sharelock/ (empty = keep current)",
+            "title": "Storage Base Path",
+            "type": "string"
+          },
+          "db_dsn": {
+            "default": "",
+            "description": "User-store DB DSN (optional; overrides discrete fields)",
+            "title": "Db Dsn",
+            "type": "string"
+          },
+          "db_host": {
+            "default": "",
+            "description": "User-store DB host (empty = keep current)",
+            "title": "Db Host",
+            "type": "string"
+          },
+          "db_port": {
+            "default": "",
+            "description": "User-store DB port (empty = keep current)",
+            "title": "Db Port",
+            "type": "string"
+          },
+          "db_name": {
+            "default": "",
+            "description": "User-store DB name (empty = keep current)",
+            "title": "Db Name",
+            "type": "string"
+          },
+          "db_username": {
+            "default": "",
+            "description": "User-store DB username (empty = keep current)",
+            "title": "Db Username",
+            "type": "string"
+          },
+          "db_password": {
+            "default": "",
+            "description": "User-store DB password (empty = keep current)",
+            "title": "Db Password",
+            "type": "string"
+          }
+        },
+        "title": "SaveAgencySettingsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "save_agency_settings receipt (handlers_admin.py) — MASKED BY DESIGN:\nno secret field exists on this model; passwords surface ONLY as the\n``storage_password_set`` boolean. data={\"saved\", \"agency_id\",\n\"storage_url\", \"storage_username\", \"storage_base_path\",\n\"storage_password_set\", \"database_configured\"} on success and\ndata={\"saved\": False, \"agency_id\", \"reason\"} on the typed denial fact.\nkind='agency_settings'.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "agency_settings",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "saved": {
+            "default": false,
+            "title": "Saved",
+            "type": "boolean"
+          },
+          "agency_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agency Id"
+          },
+          "storage_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Storage Url"
+          },
+          "storage_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Storage Username"
+          },
+          "storage_base_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Storage Base Path"
+          },
+          "storage_password_set": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Storage Password Set"
+          },
+          "database_configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Database Configured"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SaveSettingsResponse",
         "type": "object",
         "x-sdl": "entity"
       },

@@ -8,7 +8,10 @@ Contract (plan 2026-06-11-sharelock-trackA-login.md, Task A5):
 - unlock-state read fails CLOSED (Cases API degraded → locked);
 - the decorator preserves introspection (chat.function reads the params
   model from the wrapped signature/annotations);
-- all 10 @chat.function tools + skeleton + both panels are gated.
+- all 15 @chat.function tools + skeleton + both panels are gated
+  (10 original + share/unshare/list-shares/upload/save-settings, C.2 T3);
+- locked verdicts cache ≤10s (unlocked ≤60s) so a fresh panel sign-in
+  takes effect within seconds.
 """
 import asyncio
 import inspect
@@ -145,7 +148,9 @@ def _src(name: str) -> str:
 def test_all_chat_tools_gated():
     """Every @chat.function block must carry @require_unlock before its def."""
     gated = 0
-    for fname in ("handlers.py", "handlers_analysis.py"):
+    for fname in ("handlers.py", "handlers_analysis.py",
+                  "handlers_share.py", "handlers_files.py",
+                  "handlers_admin.py"):
         src = _src(fname)
         for m in re.finditer(r"@chat\.function\(", src):
             seg = src[m.start(): src.index("async def", m.start())]
@@ -153,7 +158,7 @@ def test_all_chat_tools_gated():
                 f"{fname}: @chat.function at offset {m.start()} is not gated"
             )
             gated += 1
-    assert gated == 10, f"expected 10 gated chat tools, found {gated}"
+    assert gated == 15, f"expected 15 gated chat tools, found {gated}"
 
 
 def test_skeleton_and_panels_gated():
@@ -166,3 +171,93 @@ def test_no_error_result_and_no_ui_dict_in_gate():
     src = _src("auth_gate.py")
     assert "ActionResult.error" not in src, "locked state must never be an error"
     assert '"ui"' not in src and "'ui'" not in src, "chat tools must not return ui dicts"
+
+
+# ── Locked-state cache TTL (UI batch, Track C.2 T3) ──────────────────────────
+
+
+class _RecordingCache:
+    """ctx.cache stand-in that records set() TTLs and replays get()."""
+
+    def __init__(self):
+        self.sets = []
+        self.stored = None
+
+    async def get(self, key, model):
+        return self.stored
+
+    async def set(self, key, value, ttl_seconds=60):
+        self.sets.append((key, value, ttl_seconds))
+
+
+class _CacheCtx:
+    def __init__(self, cache):
+        self.user = _User()
+        self.cache = cache
+
+
+def test_locked_verdict_cached_short(monkeypatch):
+    """Asymmetric TTL: unlocked verdicts cache 60s, LOCKED verdicts 10s —
+    a fresh panel sign-in must take effect within seconds."""
+    cache = _RecordingCache()
+
+    async def locked(imperal_id):
+        return {"unlocked": False}
+    monkeypatch.setattr(auth_gate.queries, "get_unlock", locked)
+    state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
+    assert state.unlocked is False
+    assert cache.sets and cache.sets[-1][2] == 10, (
+        f"locked verdict must cache <=10s, got {cache.sets}")
+
+    async def unlocked(imperal_id):
+        return {"unlocked": True, "agency_id": "agency-x", "role": "admin"}
+    monkeypatch.setattr(auth_gate.queries, "get_unlock", unlocked)
+    state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
+    assert state.unlocked is True
+    assert cache.sets[-1][2] == 60, (
+        f"unlocked verdict must cache 60s, got {cache.sets[-1]}")
+
+
+def test_cached_verdict_short_circuits_fetch(monkeypatch):
+    """A cached verdict (locked or not) is returned without re-fetching —
+    freshness is guaranteed by the write-side TTL."""
+    cache = _RecordingCache()
+    cache.stored = UnlockState(unlocked=False)
+
+    async def boom(imperal_id):
+        raise AssertionError("must not fetch when the verdict is cached")
+    monkeypatch.setattr(auth_gate.queries, "get_unlock", boom)
+
+    state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
+    assert state.unlocked is False
+    assert cache.sets == [], "cached verdict must not be re-written"
+
+
+def test_fetch_failure_skips_cache_write(monkeypatch):
+    """Fail-closed lock from a failed fetch must NOT be cached — the next
+    render retries the read instead of pinning a degraded verdict."""
+    cache = _RecordingCache()
+
+    async def boom(imperal_id):
+        raise RuntimeError("cases api down")
+    monkeypatch.setattr(auth_gate.queries, "get_unlock", boom)
+
+    state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
+    assert state.unlocked is False
+    assert cache.sets == []
+
+
+# ── Locked panel (sign-in placeholder with action buttons) ───────────────────
+
+
+def test_locked_panel_renders_signin_buttons():
+    node = auth_gate.locked_panel().to_dict()
+    buttons = [c for c in node["props"]["children"]
+               if c.get("type") == "Button"]
+    assert len(buttons) == 2, f"expected 2 buttons, got {node}"
+    signin, register = buttons
+    assert signin["props"]["label"] == "Sign in to Sharelock"
+    assert signin["props"]["on_click"]["action"] == "navigate"
+    assert signin["props"]["on_click"]["path"] == auth_gate.PANEL_ROUTE
+    assert register["props"]["on_click"]["action"] == "navigate"
+    assert register["props"]["on_click"]["path"] == auth_gate.REGISTER_ROUTE

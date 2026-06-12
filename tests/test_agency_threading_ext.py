@@ -11,7 +11,8 @@ _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 _QUERY_FNS = ("get_cases", "get_analysis", "get_files", "list_runs",
               "get_latest_active_run", "sign_report_url", "list_gaps",
-              "get_run", "get_graph")
+              "get_run", "get_graph", "get_case", "get_shares",
+              "post_share", "delete_share")
 
 
 def _src(name):
@@ -25,7 +26,8 @@ def test_no_agency_blind_queries_calls():
     # premise proved false for one site (bare get_cases in _load_case_summary).
     for fname in ("case_resolver.py", "panels.py", "panels_case.py",
                   "panels_gap_review.py", "panels_graph.py", "panels_analysis.py",
-                  "handlers.py"):
+                  "panels_share.py",
+                  "handlers.py", "handlers_share.py", "handlers_files.py"):
         src = _src(fname)
         for fn in _QUERY_FNS:
             for m in re.finditer(r"queries\." + fn + r"\(", src):

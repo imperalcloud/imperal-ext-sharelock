@@ -14,6 +14,7 @@ behaviour — Cases API logs a warning but does not fail.
 """
 import logging
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -46,6 +47,17 @@ class CasesAPIError(Exception):
         super().__init__(f"Cases API {status}: {detail}")
 
 
+def _raise_for_error(r: httpx.Response) -> None:
+    """Shared 4xx/5xx -> CasesAPIError translation for write helpers."""
+    if r.status_code >= 400:
+        detail = ""
+        try:
+            detail = r.json().get("detail", "")
+        except Exception:
+            detail = r.text[:200]
+        raise CasesAPIError(r.status_code, detail)
+
+
 async def _get(path: str, agency_id: Optional[str] = None):
     """GET helper. Returns JSON or empty list/dict on 404."""
     async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
@@ -57,22 +69,42 @@ async def _get(path: str, agency_id: Optional[str] = None):
 
 
 async def _post(path: str, data: dict | None = None, params: dict | None = None,
-                agency_id: Optional[str] = None):
-    """POST helper. Raises CasesAPIError on 4xx/5xx."""
+                agency_id: Optional[str] = None,
+                extra_headers: dict | None = None):
+    """POST helper. Raises CasesAPIError on 4xx/5xx.
+
+    ``extra_headers`` rides per-call headers (e.g. X-Imperal-User-ID for
+    share grants) on top of the api-key + agency headers.
+    """
+    headers = _hdrs(agency_id)
+    if extra_headers:
+        headers.update(extra_headers)
     async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
         r = await c.post(
             f"{CASES_API_URL}{path}",
-            headers=_hdrs(agency_id),
+            headers=headers,
             json=data or {},
             params=params or None,
         )
-        if r.status_code >= 400:
-            detail = ""
-            try:
-                detail = r.json().get("detail", "")
-            except Exception:
-                detail = r.text[:200]
-            raise CasesAPIError(r.status_code, detail)
+        _raise_for_error(r)
+        return r.json()
+
+
+async def _put(path: str, data: dict | None = None,
+               agency_id: Optional[str] = None):
+    """PUT helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        r = await c.put(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
+                        json=data or {})
+        _raise_for_error(r)
+        return r.json()
+
+
+async def _delete(path: str, agency_id: Optional[str] = None):
+    """DELETE helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        r = await c.delete(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id))
+        _raise_for_error(r)
         return r.json()
 
 
@@ -192,6 +224,49 @@ async def get_members(case_id: int, agency_id: Optional[str] = None) -> list:
     return resp if isinstance(resp, list) else []
 
 
+# ── Shares (Track C.2 — per-case grants within the agency) ───────────────────
+
+
+async def post_share(case_id: int, imperal_id: str, granted_by: str,
+                     agency_id: Optional[str] = None) -> dict:
+    """Grant a colleague access to a case (POST /cases/{id}/share).
+
+    The Cases API stores the grant keyed by ``imperal_id`` VERBATIM and
+    records ``granted_by`` from the X-Imperal-User-ID header.
+    """
+    return await _post(
+        f"/cases/{case_id}/share",
+        {"imperal_id": imperal_id},
+        agency_id=agency_id,
+        extra_headers={"X-Imperal-User-ID": str(granted_by or "service")[:64]},
+    )
+
+
+async def delete_share(case_id: int, imperal_id: str,
+                       agency_id: Optional[str] = None) -> dict:
+    """Revoke a grant (DELETE /cases/{id}/share/{imperal_id}).
+
+    Returns ``{"ok": True, "deleted": 0|1}`` — deleted=0 means no grant
+    existed for that imperal_id.
+    """
+    return await _delete(
+        f"/cases/{case_id}/share/{quote(str(imperal_id), safe='')}",
+        agency_id=agency_id,
+    )
+
+
+async def get_shares(case_id: int, agency_id: Optional[str] = None) -> dict:
+    """Share grants for a case (GET /cases/{id}/shares).
+
+    Returns ``{"case_id", "owner": {imperal_id,email,name}|None,
+    "shares": [{imperal_id, granted_by, created_at, email, name}]}``.
+    """
+    resp = await _get(f"/cases/{case_id}/shares", agency_id=agency_id)
+    if isinstance(resp, dict) and resp:
+        return resp
+    return {"case_id": case_id, "owner": None, "shares": []}
+
+
 # ── Report ────────────────────────────────────────────────────────────────────
 
 
@@ -299,3 +374,15 @@ async def get_agency_storage(agency_id: str) -> dict:
     """
     resp = await _get(f"/agency/{agency_id}/storage")
     return resp if isinstance(resp, dict) else {"configured": False}
+
+
+async def put_agency_storage(agency_id: str, body: dict) -> dict:
+    """Replace per-agency settings (PUT /agency/{agency_id}/storage).
+
+    The Cases API REPLACES the whole encrypted blob — callers MUST merge
+    with ``get_agency_storage()`` first (handlers_admin owns that merge;
+    an empty submitted secret means keep-existing). Body shape:
+    ``{"storage": {"backend": "nextcloud", "nextcloud": {url, username,
+    password, base_path}}, "database"?: {...}, "updated_by"?: str}``.
+    """
+    return await _put(f"/agency/{agency_id}/storage", body)

@@ -7,7 +7,7 @@ Cases API exposes it via the service-key-gated
 ``GET /auth/unlock/{imperal_id}`` (read through ``queries.get_unlock`` — the
 single Cases-API HTTP door).
 
-Without a live unlock every Sharelock surface (10 chat tools, the skeleton,
+Without a live unlock every Sharelock surface (15 chat tools, the skeleton,
 both panels) returns a graceful typed "sign in" FACT — a SUCCESS result
 carrying the ``LockedState`` SDL entity. Never an error result, never raw
 case data; the narrator owns language/phrasing (ICNLI), panels render a
@@ -21,7 +21,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from imperal_sdk import sdl
+from imperal_sdk import sdl, ui
 from imperal_sdk.chat import ActionResult
 
 from app import ext
@@ -30,7 +30,12 @@ import queries
 log = logging.getLogger("sharelock-v2.auth_gate")
 
 PANEL_ROUTE = "/ext/sharelock-v2/signin"
-_CACHE_TTL = 60  # seconds; ctx.cache enforces TTL within [5, 300]
+REGISTER_ROUTE = "/ext/sharelock-v2/register"
+# ctx.cache enforces TTL within [5, 300]. Unlocked verdicts are stable for a
+# minute; LOCKED verdicts must expire fast so a fresh panel sign-in unlocks
+# chat/panels within seconds, not a minute.
+_CACHE_TTL_UNLOCKED = 60
+_CACHE_TTL_LOCKED = 10
 
 
 @ext.cache_model("sharelock_unlock")
@@ -53,7 +58,11 @@ class LockedState(sdl.Entity):
 
 
 async def _fetch_unlock(ctx) -> UnlockState:
-    """Live unlock state for ``ctx.user`` (cached ≤60s via ``ctx.cache``).
+    """Live unlock state for ``ctx.user`` (cached via ``ctx.cache``).
+
+    Asymmetric TTL: unlocked verdicts cache ≤60s; LOCKED verdicts cache
+    ≤10s (so a fresh panel sign-in takes effect within seconds). Any
+    cached verdict is fresh by construction of the write-side TTL.
 
     No identity, read error, or cache failure all resolve to LOCKED.
     """
@@ -78,21 +87,31 @@ async def _fetch_unlock(ctx) -> UnlockState:
     except Exception:
         cache = None
 
+    key = f"sl_unlock:{imperal_id}"
+    if cache is not None:
+        try:
+            cached = await cache.get(key, UnlockState)
+            if cached is not None:
+                return cached
+        except Exception:
+            cache = None  # cache layer degraded — the direct read decides
+
     try:
-        if cache is not None:
-            try:
-                return await cache.get_or_fetch(
-                    key=f"sl_unlock:{imperal_id}",
-                    model=UnlockState,
-                    fetcher=_fetch,
-                    ttl_seconds=_CACHE_TTL,
-                )
-            except Exception:
-                pass  # cache layer degraded — fall through to the direct read
-        return await _fetch()
+        state = await _fetch()
     except Exception as e:
         log.warning(f"unlock read failed (fail-closed): {e}")
         return UnlockState(unlocked=False)
+
+    if cache is not None:
+        try:
+            await cache.set(
+                key, state,
+                ttl_seconds=(_CACHE_TTL_UNLOCKED if state.unlocked
+                             else _CACHE_TTL_LOCKED),
+            )
+        except Exception:
+            pass  # cache write failure must never affect the verdict
+    return state
 
 
 def locked_fact() -> dict:
@@ -112,11 +131,13 @@ def locked_result() -> ActionResult:
 
 def locked_panel():
     """Sign-in placeholder for panel surfaces (sidebar/dashboard)."""
-    from imperal_sdk import ui
     return ui.Stack(children=[
         ui.Text("Sharelock is locked"),
         ui.Text("Sign in with your Sharelock account to access cases."),
-        ui.Text(f"Open {PANEL_ROUTE} to sign in."),
+        ui.Button("Sign in to Sharelock", variant="primary", icon="lock",
+                  on_click=ui.Navigate(PANEL_ROUTE)),
+        ui.Button("Register with invite code", variant="ghost", icon="user-plus",
+                  on_click=ui.Navigate(REGISTER_ROUTE)),
     ])
 
 

@@ -27,6 +27,11 @@ _EXT_ROOT = os.path.abspath(os.path.join(_HERE, ".."))
 _HANDLER_FILES = (
     os.path.join(_EXT_ROOT, "handlers.py"),
     os.path.join(_EXT_ROOT, "handlers_analysis.py"),
+    # C.2 T3: colleague identifiers are chat-typed free text — same
+    # rephrase-risk class. handlers_files/handlers_admin str fields are
+    # panel-form/machine payloads (base64, config values) — the
+    # system_prompt catch-all covers their chat path.
+    os.path.join(_EXT_ROOT, "handlers_share.py"),
 )
 _VERBATIM = "verbatim"
 

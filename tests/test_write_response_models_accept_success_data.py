@@ -13,6 +13,8 @@ root on sys.path.
 from models import (
     CreateCaseResponse, SyncCasesResponse, RunAnalysisResponse,
     CancelAnalysisResponse, GapDecisionResponse,
+    ShareCaseResponse, UnshareCaseResponse, UploadReceipt,
+    SaveSettingsResponse,
 )
 
 
@@ -50,3 +52,39 @@ def test_gap_decision_response_accepts_both_handlers():
     GapDecisionResponse(case_id=1, run_id=42, decision="continue")
     GapDecisionResponse(case_id=1, run_id=42, decision="add_evidence")
     GapDecisionResponse(case_id=1, run_id=None, decision="continue")
+
+
+def test_share_case_response_accepts_success_data():
+    # handlers_share.py fn_share_case: data={"shared","case_id","imperal_id","note"}
+    ShareCaseResponse(shared=True, case_id=5, imperal_id="imp_u_x", note=None)
+    ShareCaseResponse(shared=True, case_id=5, imperal_id="bob@example.com",
+                      note="identifier does not look like an imperal id "
+                           "(imp_u_...) — stored verbatim; email lookup "
+                           "lands server-side later")
+
+
+def test_unshare_case_response_accepts_success_data():
+    # handlers_share.py fn_unshare_case: data={"unshared","deleted","case_id","imperal_id"}
+    UnshareCaseResponse(unshared=True, deleted=1, case_id=5, imperal_id="imp_u_x")
+    UnshareCaseResponse(unshared=False, deleted=0, case_id=5, imperal_id="imp_u_x")
+
+
+def test_upload_receipt_accepts_success_and_limit_data():
+    # handlers_files.py success: data={"uploaded","case_id","case_name","files","failed","note"}
+    UploadReceipt(uploaded=2, case_id=7, case_name="CaseU",
+                  files=["a.txt", "b.txt"], failed=[],
+                  note="analysis will pick the new files up on the next census run")
+    # limit fact: data={"uploaded": 0, "case_id", "files": [], "reason"}
+    UploadReceipt(uploaded=0, case_id=7, files=[],
+                  reason="limit 8 files per upload (got 9)")
+
+
+def test_save_settings_response_accepts_success_and_denial_data():
+    # handlers_admin.py success (MASKED — booleans only for secrets)
+    SaveSettingsResponse(saved=True, agency_id="acme",
+                         storage_url="https://nc.example.org",
+                         storage_username="u", storage_base_path="/Sharelock/",
+                         storage_password_set=True, database_configured=False)
+    # typed denial fact
+    SaveSettingsResponse(saved=False, agency_id="acme",
+                         reason="admin_role_required")

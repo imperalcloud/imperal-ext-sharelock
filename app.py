@@ -16,7 +16,7 @@ log = logging.getLogger("sharelock-v2")
 
 ext = Extension(
     "sharelock-v2",
-    version="3.5.0",
+    version="3.6.0",
     capabilities=[
         # Case CRUD + doc search
         "sharelock:cases:read", "sharelock:cases:write",
