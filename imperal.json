@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.2.1",
+  "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
   "version": "3.7.0",
   "name": "Sharelock",
@@ -4778,7 +4778,7 @@
       "return_schema": {
         "$defs": {
           "RelationshipRecord": {
-            "description": "One entity-relationship row (list_relationships). Cases API rows carry\nsource / target / rel_type|type (+ id|relationship_id). kind='relationship'.",
+            "description": "One entity-relationship row (list_relationships). Cases API rows carry\nsource_entity / target_entity / rel_type (+ id|relationship_id).\nkind='relationship'.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -4848,7 +4848,7 @@
                 "default": null,
                 "title": "Url"
               },
-              "source": {
+              "source_entity": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -4858,9 +4858,9 @@
                   }
                 ],
                 "default": null,
-                "title": "Source"
+                "title": "Source Entity"
               },
-              "target": {
+              "target_entity": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -4870,7 +4870,7 @@
                   }
                 ],
                 "default": null,
-                "title": "Target"
+                "title": "Target Entity"
               },
               "rel_type": {
                 "anyOf": [
@@ -4982,7 +4982,7 @@
       "return_schema": {
         "$defs": {
           "TimelineEventRecord": {
-            "description": "One timeline-event row (list_timeline_events). kind='timeline_event'.",
+            "description": "One timeline-event row (list_timeline_events). Cases API rows carry\ntype / description / occurred_at (+ id|event_id). kind='timeline_event'.\n``event_type`` kept as a fallback alias for legacy/test stubs.",
             "properties": {
               "created_at": {
                 "anyOf": [
@@ -5093,6 +5093,18 @@
                 ],
                 "default": null,
                 "title": "Url"
+              },
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Type"
               },
               "event_type": {
                 "anyOf": [

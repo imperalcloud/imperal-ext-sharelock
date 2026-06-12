@@ -102,16 +102,26 @@ async def fn_get_audit_log(ctx, params: CaseIdParams) -> ActionResult:
             params.case_id, limit=_LIST_CAP, agency_id=agency)
         data = _entity_list(rows, params.case_id)
         verified = None
+        broken_at = None
+        total_entries = None
         try:
             verdict = await queries.verify_audit(params.case_id, agency_id=agency)
             if isinstance(verdict, dict) and verdict:
-                verified = bool(verdict.get("valid", verdict.get("verified")))
+                # Real key is chain_valid; fall back to legacy valid/verified stubs
+                verified = bool(verdict.get("chain_valid",
+                                verdict.get("valid", verdict.get("verified"))))
+                broken_at = verdict.get("broken_at")
+                total_entries = verdict.get("total_entries")
         except Exception as ve:
             log.debug(f"verify_audit({params.case_id}) failed: {ve}")
         data["verified"] = verified
         integ = ("" if verified is None else
                  (" Chain integrity: verified." if verified
                   else " Chain integrity: FAILED."))
+        if not verified and verified is not None and broken_at is not None:
+            integ += f" Broken at entry {broken_at}."
+        if total_entries is not None:
+            integ += f" ({total_entries} entries checked.)"
         return ActionResult.success(
             data=data,
             summary=(f"{data['total']} audit event(s) for case {params.case_id}."

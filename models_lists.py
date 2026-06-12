@@ -50,11 +50,12 @@ class CaseFileRecord(sdl.Entity, sdl.FileObject):
 
 class RelationshipRecord(sdl.Entity):
     """One entity-relationship row (list_relationships). Cases API rows carry
-    source / target / rel_type|type (+ id|relationship_id). kind='relationship'.
+    source_entity / target_entity / rel_type (+ id|relationship_id).
+    kind='relationship'.
     """
     kind: str = "relationship"
-    source: Optional[str] = None
-    target: Optional[str] = None
+    source_entity: Optional[str] = None
+    target_entity: Optional[str] = None
     rel_type: Optional[str] = None
 
     @model_validator(mode="before")
@@ -64,15 +65,19 @@ class RelationshipRecord(sdl.Entity):
             data.setdefault("id", data.get("id") or data.get("relationship_id") or "")
             data.setdefault(
                 "title",
-                f"{data.get('source', '?')} → {data.get('target', '?')}")
+                f"{data.get('source_entity', '?')} → {data.get('target_entity', '?')}")
             data.setdefault("kind", "relationship")
         return data
 
 
 class TimelineEventRecord(sdl.Entity, sdl.Timestamped):
-    """One timeline-event row (list_timeline_events). kind='timeline_event'."""
+    """One timeline-event row (list_timeline_events). Cases API rows carry
+    type / description / occurred_at (+ id|event_id). kind='timeline_event'.
+    ``event_type`` kept as a fallback alias for legacy/test stubs.
+    """
     kind: str = "timeline_event"
-    event_type: Optional[str] = None
+    type: Optional[str] = None
+    event_type: Optional[str] = None  # fallback alias — real key is ``type``
     description: Optional[str] = None
 
     @model_validator(mode="before")
@@ -80,8 +85,10 @@ class TimelineEventRecord(sdl.Entity, sdl.Timestamped):
     def _sdl_canon(cls, data):
         if isinstance(data, dict):
             data.setdefault("id", data.get("id") or data.get("event_id") or "")
-            data.setdefault("title", data.get("description")
-                            or data.get("event_type") or str(data.get("id") or ""))
+            # Real API key is ``type``; fall back to legacy ``event_type`` stubs
+            event_label = (data.get("type") or data.get("event_type")
+                           or str(data.get("id") or ""))
+            data.setdefault("title", data.get("description") or event_label)
             data.setdefault("kind", "timeline_event")
         return data
 

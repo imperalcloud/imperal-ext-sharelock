@@ -358,7 +358,8 @@ def test_get_audit_log_is_chain_of_custody(monkeypatch):
         return rows[:limit]
 
     async def verify(case_id, agency_id=None):
-        return {"valid": True, "checked": 60}
+        # Real Cases API key is chain_valid (not valid/verified)
+        return {"chain_valid": True, "total_entries": 60}
     monkeypatch.setattr(queries, "get_audit_log", audit)
     monkeypatch.setattr(queries, "verify_audit", verify)
 
@@ -367,6 +368,7 @@ def test_get_audit_log_is_chain_of_custody(monkeypatch):
     assert res.status == "success"
     assert len(res.data["items"]) <= 50
     assert res.data["verified"] is True
+    assert "60 entries checked" in res.summary
 
 
 def test_update_case_patches(monkeypatch):

@@ -102,19 +102,26 @@ async def fn_get_case_detail(ctx, params: CaseIdParams) -> ActionResult:
         if not case or not case.get("id"):
             return ActionResult.error(f"Case {params.case_id} not found.",
                                       retryable=False)
+        # Cases API GET /cases/{id} returns a `files` array but NO `file_count`
+        # key. Derive file_count from the array when present; fall back to the
+        # explicit key if the API ever adds it; leave None if neither is present.
+        raw_file_count = case.get("file_count")
+        files = case.get("files")
+        if raw_file_count is None and isinstance(files, list):
+            raw_file_count = len(files)
         return ActionResult.success(
             data={
                 "id": case.get("id"),
                 "name": case.get("name"),
                 "status": case.get("status"),
                 "analysis_status": case.get("analysis_status"),
-                "file_count": case.get("file_count"),
+                "file_count": raw_file_count,
                 "active_run_id": case.get("active_run_id"),
                 "created_at": case.get("created_at"),
             },
             summary=(f"**{case.get('name')}** (ID: {case.get('id')}) — "
                      f"{case.get('analysis_status') or case.get('status') or 'not run'}, "
-                     f"{case.get('file_count', 0)} file(s)."),
+                     f"{raw_file_count or 0} file(s)."),
         )
     except Exception as e:
         return ActionResult.error(f"Failed to load case: {e}")
