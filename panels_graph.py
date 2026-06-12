@@ -91,11 +91,15 @@ def _focus_from_node_id(node_id) -> str | None:
     return None
 
 
-def _back_button(case_id: int) -> ui.UINode:
+def _back_button(panel_ref: str) -> ui.UINode:
+    # panel_ref is the dashboard's own case identity (the folder name the
+    # sidebar/panel round-trips as case_id) — NOT the numeric Cases-API id.
+    # The graph tab re-resolves case_id via _get_api_case(folder_name); a
+    # numeric id round-tripped here fails that lookup → "Not Registered".
     return ui.Button(
         label="← Back to overview", variant="ghost", size="sm",
         on_click=ui.Call("__panel__dashboard", tab="graph", section="",
-                         view="", case_id=str(case_id), node_id=""),
+                         view="", case_id=str(panel_ref), node_id=""),
     )
 
 
@@ -106,21 +110,27 @@ def _graph_unavailable(exc: object) -> ui.UINode:
 
 async def build_graph_panel(case_id: int,
                             agency_id: str | None = None,
-                            graph_focus: str | None = None) -> ui.UINode:
+                            graph_focus: str | None = None,
+                            panel_ref: str | None = None) -> ui.UINode:
     """Build the Intelligence Graph panel.
 
+    ``case_id`` (numeric Cases-API id) drives the data fetch; ``panel_ref``
+    is the dashboard's round-trip identity (folder name) used in every
+    ``__panel__dashboard`` Call so cluster clicks / back resolve correctly.
     ``graph_focus`` (an entity type, e.g. ``"phone"``) selects the drill-in
     view; otherwise the clustered overview is rendered.
     """
+    ref = panel_ref if panel_ref is not None else str(case_id)
     if graph_focus:
-        return await _build_drill_in(case_id, graph_focus, agency_id)
-    return await _build_overview(case_id, agency_id)
+        return await _build_drill_in(case_id, graph_focus, agency_id, ref)
+    return await _build_overview(case_id, agency_id, ref)
 
 
 # ── Overview (type clusters) ────────────────────────────────────────────────────
 
 
-async def _build_overview(case_id: int, agency_id: str | None) -> ui.UINode:
+async def _build_overview(case_id: int, agency_id: str | None,
+                          panel_ref: str) -> ui.UINode:
     try:
         payload = await queries.get_graph(
             case_id, max_nodes=_FULL_FETCH_NODES, min_mentions=1,
@@ -178,7 +188,7 @@ async def _build_overview(case_id: int, agency_id: str | None) -> ui.UINode:
         min_node_size=30,
         max_node_size=90,
         on_node_click=ui.Call("__panel__dashboard", tab="graph", section="",
-                              view="", case_id=str(case_id)),
+                              view="", case_id=str(panel_ref)),
     )
     graph.props["animate"] = False
     children.append(ui.Section(title="Intelligence Graph", children=[graph]))
@@ -189,7 +199,7 @@ async def _build_overview(case_id: int, agency_id: str | None) -> ui.UINode:
 
 
 async def _build_drill_in(case_id: int, etype: str,
-                          agency_id: str | None) -> ui.UINode:
+                          agency_id: str | None, panel_ref: str) -> ui.UINode:
     try:
         payload = await queries.get_graph(
             case_id, max_nodes=_DRILL_NODES, min_mentions=1,
@@ -197,7 +207,7 @@ async def _build_drill_in(case_id: int, etype: str,
     except Exception as exc:
         log.error(f"graph drill-in: fetch failed case_id={case_id} "
                   f"type={etype}: {exc}")
-        return ui.Stack(children=[_back_button(case_id),
+        return ui.Stack(children=[_back_button(panel_ref),
                                   _graph_unavailable(exc)], gap=3)
 
     raw_nodes = payload.get("nodes") or []
@@ -220,7 +230,7 @@ async def _build_drill_in(case_id: int, etype: str,
 
     if not nodes:
         return ui.Stack(children=[
-            _back_button(case_id),
+            _back_button(panel_ref),
             ui.Alert(title=f"No {title} entities",
                      message=f"No entities of type '{etype}' in this case.",
                      type="info"),
@@ -235,7 +245,7 @@ async def _build_drill_in(case_id: int, etype: str,
                 icon="GitBranch", color="green"),
     ])
 
-    children: list = [_back_button(case_id), summary]
+    children: list = [_back_button(panel_ref), summary]
     if total_of_type > len(nodes) or edges_trimmed:
         parts = []
         if total_of_type > len(nodes):

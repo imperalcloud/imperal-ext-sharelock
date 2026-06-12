@@ -183,8 +183,11 @@ async def _build_graph_tab(ctx, folder_name: str, node_id: str | None = None):
                         message="Register this folder as a case first.",
                         type="info")
     graph_focus = _focus_from_node_id(node_id)
+    # panel_ref = the dashboard's round-trip identity (folder name), NOT the
+    # numeric api_case_id — cluster clicks re-enter via _get_api_case(folder).
     return await build_graph_panel(api_case_id, agency_id=_user_agency(ctx),
-                                   graph_focus=graph_focus)
+                                   graph_focus=graph_focus,
+                                   panel_ref=folder_name)
 
 
 async def _build_report_tab(ctx, folder_name: str):
