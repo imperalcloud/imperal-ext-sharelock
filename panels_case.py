@@ -223,10 +223,20 @@ async def _build_upload_section(ctx, folder_name: str):
     api_case_id = _resolve_api_case_id(api_case)
     if api_case_id is None:
         return None
+    # Bulk uploader (2026-06-12): streams each file DIRECTLY to the Cases API
+    # evidence endpoint (agency WebDAV) through a client-side concurrency pool —
+    # hundreds/thousands of large files at once with a live progress bar. This
+    # replaces the legacy base64-through-kernel FileUpload (8-file / 10 MB
+    # Temporal-payload ceiling). Census registers the files on its next run.
+    from imperal_sdk.ui.base import UINode
     return ui.Section(title="Upload evidence", children=[
-        ui.FileUpload(accept="*", max_size_mb=10, multiple=True,
-                      max_files=8, max_total_mb=25, param_name="files",
-                      on_upload=ui.Call("upload_case_files",
-                                        case_id=api_case_id)),
-        ui.Text("New files are picked up by analysis on the next census run."),
+        UINode(type="BulkUpload", props={
+            "endpoint": f"/api/ext/sharelock/cases/{api_case_id}/evidence",
+            "concurrency": 6,
+            "accept": "*",
+            "allow_folders": True,
+        }),
+        ui.Text("Drop a whole folder or thousands of files — each streams "
+                "directly to the case's storage. New files are picked up by "
+                "analysis on the next census run."),
     ])
