@@ -38,6 +38,15 @@ def test_run_analysis_response_accepts_success_data():
     # cancel_analysis handler already models run_id as int|str, so a string
     # run id must not be rejected here either (consistency + warn-only safety).
     RunAnalysisResponse(case_id=1, status="started", run_id="run-abc-1", version="v2")
+    # D1 proactive decision FACTS (elder-friendly re-run confirmation):
+    RunAnalysisResponse(case_id=1, status="completed", action="confirm_rerun",
+                        already_version=4, completed_at="2026-06-10T12:00:00Z")
+    RunAnalysisResponse(case_id=1, status="running", action="already_running",
+                        version=6)
+    RunAnalysisResponse(case_id=1, status="gap_review",
+                        action="awaiting_gap_decision", already_version=5)
+    RunAnalysisResponse(case_id=1, status="started", action="started",
+                        version=1, workflow_id="wf-fresh")
 
 
 def test_cancel_analysis_response_accepts_success_data():

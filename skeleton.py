@@ -37,13 +37,18 @@ def _pick_active_case(enriched: list[dict]) -> dict | None:
     """Choose the most-likely-active case.
 
     Priority:
-      1. analysis_status == "running"  (user is watching progress).
-      2. analysis_status == "pending"  (user just kicked off analysis).
-      3. Most recent analysis_updated_at (if present on the row).
-      4. First case in the list (deterministic fallback).
+      1. analysis_status == "gap_review" (PAUSED — the user owes a decision;
+         focus it so the panel/skeleton lead with the pending choice).
+      2. analysis_status == "running"  (user is watching progress).
+      3. analysis_status == "pending"  (user just kicked off analysis).
+      4. Most recent analysis_updated_at (if present on the row).
+      5. First case in the list (deterministic fallback).
     """
     if not enriched:
         return None
+    gap_review = [c for c in enriched if c.get("analysis_status") == "gap_review"]
+    if gap_review:
+        return gap_review[0]
     running = [c for c in enriched if c.get("analysis_status") == "running"]
     if running:
         return running[0]
@@ -138,9 +143,32 @@ async def on_skeleton_refresh(ctx, **kwargs):
         return {"response": {"error": str(e)}}
 
 
+async def _safe_notify(ctx, message: str, **kwargs) -> None:
+    """Fire ``ctx.notify`` for a proactive push, never breaking the skeleton.
+
+    DOJ users barely use computers — a paused analysis must PING them, not
+    hide behind a panel badge. ``ctx.notify`` may be absent (older Context,
+    test harness) or fail (gateway down); either way we swallow and log so a
+    notify problem can never break the skeleton-alert path.
+    """
+    notify = getattr(ctx, "notify", None)
+    if notify is None:
+        return
+    try:
+        await notify(message, priority="high", channel="in_app")
+    except Exception as e:  # noqa: BLE001 — notify is best-effort
+        log.warning(f"ctx.notify failed (continuing): {e}")
+
+
 @ext.tool("skeleton_alert_case_status", description="Skeleton alert")
 async def on_skeleton_alert(ctx, **kwargs):
-    """Proactive alert when case status or files change."""
+    """Proactive alert when case status or files change.
+
+    Fires ONLY on a status TRANSITION (old != new) so a paused/completed
+    case is announced once, not on every poll. The gap_review arm also
+    PUSHES a notification (ctx.notify) — the proactive ping a barely-
+    technical user needs when the analysis is waiting on their decision.
+    """
     old = kwargs.get("old", {})
     new = kwargs.get("new", {})
     case_name = new.get("case_name", "your case")
@@ -149,6 +177,17 @@ async def on_skeleton_alert(ctx, **kwargs):
     new_status = new.get("analysis_status")
 
     if old_status != new_status:
+        if new_status == "gap_review":
+            # Surface the pending decision AND push a notification — never
+            # leave the needed choice hidden behind a silent panel button.
+            await _safe_notify(
+                ctx,
+                f"Sharelock paused on case {case_name} — it needs your "
+                f"decision (continue or add evidence).",
+            )
+            return (f"Analysis of case **{case_name}** is PAUSED — it needs "
+                    f"your decision: continue, or add more evidence. "
+                    f"Just tell me 'continue' or 'add evidence'.")
         if new_status == "completed":
             return f"Analysis of case **{case_name}** is complete. You can now ask questions about the findings."
         elif new_status == "running":

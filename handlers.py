@@ -222,8 +222,27 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
     )
 
     if state == "STATUS":
-        return ActionResult.success(data={"state": "status"},
-                                    summary=chat_engine.status_response())
+        return ActionResult.success(
+            data={"state": "status"},
+            summary=chat_engine.status_response(
+                case_data.get("analysis_progress")),
+        )
+
+    if state == "GAP_REVIEW":
+        # Lead with the pending decision — reuse the gap data and CLEARLY
+        # present the two plain-language choices so the user can answer in
+        # chat ("continue" / "add evidence"), not only via the panel button.
+        agency = _user_agency(ctx)
+        gaps: list = []
+        run: dict = {}
+        try:
+            run = await queries.get_latest_active_run(case_id, agency_id=agency) or {}
+            run_id = run.get("run_id")
+            gaps = await queries.list_gaps(case_id, run_id, agency_id=agency)
+        except Exception as e:
+            log.warning(f"case_chat: gap-review fetch failed for case {case_id}: {e}")
+        fact, summary = chat_engine.build_gap_review_fact(gaps, run)
+        return ActionResult.success(data=fact, summary=summary)
 
     if state == "CASE_LIST":
         return ActionResult.success(data={"state": "case_list"},

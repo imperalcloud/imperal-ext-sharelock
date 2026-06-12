@@ -78,17 +78,30 @@ class GapReviewResponse(sdl.EntityList[GapReviewItem]):
 
 
 class RunAnalysisResponse(sdl.Entity):
-    """run_analysis receipt (handlers_analysis.py: data={"case_id", "status",
-    "run_id", "version"}) — a canonical SDL entity for one analysis run.
-    Canonical id <- ``run_id`` (falling back to ``case_id``); title <- run label.
-    ``run_id``/``version`` come straight from the Cases API start response and may
-    be absent on a partial response. All fields kept verbatim.
+    """run_analysis receipt — a canonical SDL entity for one analysis run.
+
+    The handler emits one of several decision FACTS via the ``action``
+    discriminator (handlers_analysis.fn_run_analysis):
+      - ``started``              data={"case_id","status","version","workflow_id"}
+      - ``confirm_rerun``        data={"case_id","status","already_version","completed_at"}
+      - ``already_running``      data={"case_id","status","version"}
+      - ``awaiting_gap_decision`` data={"case_id","status","already_version"}
+    Every key is modelled as an additive Optional field so the kernel's V24
+    data_model validation accepts all four shapes. Canonical id <- ``run_id``
+    (falling back to ``case_id``); title <- run label. ``run_id``/``version``
+    come straight from the Cases API start response and may be absent on a
+    partial response.
     """
     kind: str = "analysis_run"
     case_id: Optional[int] = None
     status: Optional[str] = None
     run_id: int | str | None = None
     version: int | str | None = None
+    # Elder-friendly proactive decision FACTS (D1) — additive, optional.
+    action: Optional[str] = None
+    already_version: int | str | None = None
+    completed_at: Optional[str] = None
+    workflow_id: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod

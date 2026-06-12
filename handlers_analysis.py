@@ -29,6 +29,16 @@ class CaseIdParams(BaseModel):
     case_id: int = Field(..., description="Case ID")
 
 
+class RunAnalysisParams(BaseModel):
+    case_id: int = Field(..., description="Case ID")
+    confirm: bool = Field(False, description=(
+        "Set true ONLY when the user has explicitly confirmed re-running an "
+        "already-completed analysis (e.g. replied yes to the re-run question). "
+        "Leave false otherwise — the handler will ask the user to confirm "
+        "before starting a fresh run on a case that was already analyzed."
+    ))
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -46,25 +56,101 @@ async def _latest_run_or_error(case_id: int, agency_id: str | None = None):
 # ── Run lifecycle ─────────────────────────────────────────────────────────────
 
 
+async def _prior_analysis_state(case_id: int, agency_id: str | None):
+    """Read the case's current analysis status + latest version/date.
+
+    Returns ``(status, version, completed_at)`` where any element may be
+    None. Probing is cheap (one analysis read + the runs head) and degrades
+    gracefully to "no prior analysis" so a transient read error never blocks
+    the user from starting a run.
+    """
+    try:
+        analysis = await queries.get_analysis(case_id, agency_id=agency_id)
+    except Exception as e:  # noqa: BLE001 — degrade to "no prior analysis"
+        log.warning(f"run_analysis: prior-state read failed (continuing): {e}")
+        return None, None, None
+    status = (analysis or {}).get("analysis_status")
+    version = (analysis or {}).get("analysis_version")
+    completed_at = (analysis or {}).get("analysis_updated_at")
+    if version is None:
+        try:
+            runs = await queries.list_runs(case_id, agency_id=agency_id)
+            if runs:
+                version = runs[0].get("version")
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"run_analysis: list_runs probe failed (non-fatal): {e}")
+    return status, version, completed_at
+
+
 @chat.function("run_analysis", action_type="write",
                effects=["run:analysis"],
                data_model=RunAnalysisResponse,
-               description="Start deep forensic analysis on a case")
+               description=(
+                   "Start deep forensic analysis on a case. If the case was "
+                   "ALREADY analyzed, this asks the user to confirm a re-run "
+                   "first (pass confirm=true only after they say yes); if a "
+                   "run is already in progress or paused at gap review, it "
+                   "reports that instead of starting a duplicate."
+               ))
 @require_unlock
-async def fn_run_analysis(ctx, params: CaseIdParams) -> ActionResult:
-    """Signal session workflow to start analysis. B2: handle 409 from Cases API."""
+async def fn_run_analysis(ctx, params: RunAnalysisParams) -> ActionResult:
+    """Start analysis — elder-friendly: always SAY the state, confirm re-runs.
+
+    Before starting we read the case's current analysis state so we never
+    silently launch a duplicate or re-run:
+      - gap_review  → the case is PAUSED waiting for a decision; we say so.
+      - pending/running → a run is already going; we say so.
+      - completed/cancelled/error (and not confirm) → ask the user to
+        confirm a from-scratch re-run.
+      - otherwise (no prior analysis, OR confirm=true) → start.
+    """
     user_id = _user_id(ctx)
     agency = _user_agency(ctx)
-    try:
-        result = await queries.start_analysis(params.case_id, user_id, agency_id=agency)
-        run_id = result.get("run_id")
-        version = result.get("version")
+    case_id = params.case_id
+
+    status, version, completed_at = await _prior_analysis_state(case_id, agency)
+
+    if status == "gap_review":
         return ActionResult.success(
-            data={"case_id": params.case_id, "status": "started",
-                  "run_id": run_id, "version": version},
-            summary=(f"Deep forensic analysis started for case {params.case_id} "
-                     f"(run #{run_id}, v{version}). This typically takes 2-5 minutes. "
-                     f"You will be notified when complete."),
+            data={"case_id": case_id, "action": "awaiting_gap_decision",
+                  "status": status, "already_version": version},
+            summary=(f"Analysis of case {case_id} is paused at Gap Review "
+                     f"waiting for your decision — continue, or add evidence. "
+                     f"(Not starting a new run.)"),
+        )
+
+    if status in ("pending", "running"):
+        return ActionResult.success(
+            data={"case_id": case_id, "action": "already_running",
+                  "status": status, "version": version},
+            summary=(f"Analysis of case {case_id} is already running "
+                     f"(v{version}). I'll let you know when it's done."),
+        )
+
+    if status in ("completed", "cancelled", "error") and not params.confirm:
+        when = f", completed {completed_at}" if completed_at else ""
+        return ActionResult.success(
+            data={"case_id": case_id, "action": "confirm_rerun",
+                  "status": status, "already_version": version,
+                  "completed_at": completed_at},
+            summary=(f"Case {case_id} was already analyzed (version {version}"
+                     f"{when}). Do you want to RE-RUN the analysis from "
+                     f"scratch? It will create a new version and take a few "
+                     f"minutes. Reply yes to re-run."),
+        )
+
+    try:
+        result = await queries.start_analysis(case_id, user_id, agency_id=agency)
+        new_version = result.get("version")
+        workflow_id = result.get("workflow_id")
+        return ActionResult.success(
+            data={"case_id": case_id, "status": "started",
+                  "action": "started", "version": new_version,
+                  "workflow_id": workflow_id},
+            summary=(f"Started deep forensic analysis of case {case_id} "
+                     f"(version {new_version}). This usually takes a few "
+                     f"minutes — I'll tell you when it's ready, and pause to "
+                     f"ask you if I hit a gap that needs your decision."),
         )
     except CasesAPIError as e:
         if e.status == 409:

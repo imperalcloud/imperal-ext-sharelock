@@ -106,9 +106,17 @@ def _build_case_context(case_data: dict, case_id: int | None) -> str:
 
 
 def resolve_state(case_id: int | None, analysis_status: str | None) -> str:
-    """Determine chat state from case context."""
+    """Determine chat state from case context.
+
+    GAP_REVIEW (analysis paused waiting for the operator's continue /
+    add-evidence decision) is its own state so chat LEADS with the pending
+    decision instead of mistaking a paused case for an un-analyzed one
+    (the prior bug: gap_review fell through to INTAKE).
+    """
     if not case_id:
         return "CASE_LIST"
+    if analysis_status == "gap_review":
+        return "GAP_REVIEW"
     if analysis_status in ("pending", "running"):
         return "STATUS"
     if analysis_status == "completed":
@@ -254,13 +262,91 @@ async def run_intelligence(message: str, history: list,
     return parsed.prose
 
 
-def status_response() -> str:
-    """STATUS state: analysis in progress, no LLM call."""
-    return (
+def status_response(analysis_progress: dict | None = None) -> str:
+    """STATUS state: analysis in progress, no LLM call.
+
+    When the skeleton carried Redis progress (phase/percent), surface it so
+    "where is it now" is answerable instead of a flat "in progress".
+    """
+    base = (
         "Analysis is currently in progress. "
         "This typically takes 2-5 minutes depending on the number of documents. "
         "I will be fully operational once it completes."
     )
+    if isinstance(analysis_progress, dict):
+        phase = analysis_progress.get("phase") or analysis_progress.get("stage")
+        pct = analysis_progress.get("percent")
+        if pct is None:
+            pct = analysis_progress.get("progress")
+        bits = []
+        if phase:
+            bits.append(f"phase: {phase}")
+        if pct is not None:
+            try:
+                bits.append(f"~{int(float(pct))}%")
+            except (TypeError, ValueError):
+                pass
+        if bits:
+            return f"Analysis running — {', '.join(bits)}.\n\n{base}"
+    return base
+
+
+def build_gap_review_fact(gaps: list, run: dict | None) -> tuple[dict, str]:
+    """GAP_REVIEW state: the analysis is PAUSED waiting for a decision.
+
+    Returns (fact, summary). The FACT carries the structured gap data
+    (count + by_severity + confidence current→potential + the two named
+    choices); the narrator owns the language (ICNLI). The summary is the
+    elder-friendly plain-language fallback that LEADS with the decision so
+    the user can answer in chat ("continue" / "add evidence"), not only the
+    panel button.
+    """
+    run = run or {}
+    by_severity: dict[str, int] = {"BLOCKING": 0, "QUALITY": 0, "INFORMATIONAL": 0}
+    for g in gaps or []:
+        sev = g.get("severity", "INFORMATIONAL")
+        by_severity[sev] = by_severity.get(sev, 0) + 1
+    gap_count = len(gaps or [])
+    confidence_current = run.get("confidence_current")
+    confidence_potential = run.get("confidence_potential")
+
+    fact = {
+        "state": "gap_review",
+        "paused": True,
+        "gap_count": gap_count,
+        "by_severity": by_severity,
+        "confidence_current": confidence_current,
+        "confidence_potential": confidence_potential,
+        # The two plain-language choices map to the existing chat tools:
+        # "continue" → continue_analysis, "add evidence" → resume_with_new_evidence.
+        "choices": [
+            {"id": "continue", "tool": "continue_analysis",
+             "label": "Continue analysis as-is"},
+            {"id": "add_evidence", "tool": "resume_with_new_evidence",
+             "label": "Add more evidence first and re-run"},
+        ],
+    }
+
+    conf = ""
+    if confidence_current is not None:
+        try:
+            cur = f"{float(confidence_current):.0%}"
+            if confidence_potential is not None:
+                conf = (f" Confidence is at {cur} now and could rise to "
+                        f"{float(confidence_potential):.0%} with more evidence.")
+            else:
+                conf = f" Confidence is at {cur}."
+        except (TypeError, ValueError):
+            conf = ""
+
+    summary = (
+        f"I've finished the first analysis pass and found {gap_count} gap(s)."
+        f"{conf} I've PAUSED and I need your decision: "
+        f"(1) Continue analysis as-is, or "
+        f"(2) Add more evidence first and re-run. "
+        f"Just tell me 'continue' or 'add evidence'."
+    )
+    return fact, summary
 
 
 def case_list_response(case_data: dict) -> str:
