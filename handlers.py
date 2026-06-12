@@ -22,7 +22,7 @@ import queries
 from queries import CasesAPIError
 import chat as chat_engine
 from case_resolver import resolve_case_id, load_case_data_from_api
-from cache_models import CaseSummary
+from cache_models import CaseSummary, thin_case_summary_data
 import files
 from validation import validate_case_name, folder_exists, list_top_folders
 from models import (
@@ -116,19 +116,9 @@ async def _load_case_summary(ctx, user_id: str, case_id: int | None) -> CaseSumm
                  "file_count": c.get("file_count", 0)}
                 for c in all_cases
             ]}
-        # Thin projection before cache: cap files list to 20 entries.
-        # I-CACHE-VALUE-SIZE-CAP-64KB rejects payloads > 64KB; case 35
-        # (2655 files) serialises to ~142KB and fails the cache write,
-        # which silently fell back to the cold seed payload with
-        # analysis_status=None -> INTAKE state on a completed case.
-        # Chat path does not consume the full files[] list anyway:
-        # run_intelligence calls fetch_grounded_context() separately,
-        # run_intake/case_list_response use file_count, not files.
-        if "files" in data and isinstance(data["files"], list):
-            full_count = len(data["files"])
-            data["files"] = data["files"][:20]
-            if full_count > 20 and "file_count" not in data:
-                data["file_count"] = full_count
+        # Thin projection before cache (I-CACHE-VALUE-SIZE-CAP-64KB) —
+        # shared helper, same trim as the panel summary loader.
+        data = thin_case_summary_data(data)
         return CaseSummary(**{k: v for k, v in data.items()
                                if k in CaseSummary.model_fields})
 

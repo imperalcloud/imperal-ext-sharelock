@@ -98,3 +98,23 @@ class UserCasesListing(BaseModel):
     falls back to cached snapshot when Cases API is slow.
     """
     cases: list[dict[str, Any]] = Field(default_factory=list)
+
+
+_MAX_CACHED_FILES = 20
+
+
+def thin_case_summary_data(data: dict) -> dict:
+    """Cap the files[] payload BEFORE a CaseSummary enters ctx.cache.
+
+    I-CACHE-VALUE-SIZE-CAP-64KB rejects payloads > 64KB; a 2655-file case
+    serialises to ~142KB and fails the cache write (live incidents: chat
+    path 2026-05, Analysis tab «Alex Case 1» 2026-06-12 — the panel copy
+    of the summary loader lacked this trim). Consumers use file_count,
+    not the full listing.
+    """
+    if "files" in data and isinstance(data["files"], list):
+        full_count = len(data["files"])
+        data["files"] = data["files"][:_MAX_CACHED_FILES]
+        if full_count > _MAX_CACHED_FILES and "file_count" not in data:
+            data["file_count"] = full_count
+    return data

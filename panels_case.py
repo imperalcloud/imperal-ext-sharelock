@@ -19,7 +19,7 @@ from app import ext, _user_id, _user_agency, CASES_API_URL
 from auth_gate import _fetch_unlock, locked_panel
 import queries
 import panels_analysis as pa
-from cache_models import CaseSummary
+from cache_models import CaseSummary, thin_case_summary_data
 # Module-level on purpose (NOT inside _fetch): bare ext module names resolve
 # correctly only while the loader imports this extension; a runtime-lazy
 # import re-executes case_resolver against another ext's namespace
@@ -200,6 +200,9 @@ async def _load_case_summary(ctx, api_case_id: int | None) -> CaseSummary:
         except Exception as exc:
             log.warning(f"case_summary fetch failed for case {api_case_id}: {exc}")
             data = {}
+        # I-CACHE-VALUE-SIZE-CAP-64KB: cap files[] before the cache write
+        # (live incident: «Alex Case 1», 2655 files -> 142KB envelope).
+        data = thin_case_summary_data(data)
         return CaseSummary(**{k: v for k, v in data.items()
                                if k in CaseSummary.model_fields})
 
