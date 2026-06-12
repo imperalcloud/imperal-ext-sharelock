@@ -126,7 +126,10 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
         elif tab == "gap_review":
             content = await _build_gap_review_tab(ctx, case_id)
         elif tab == "graph":
-            content = await _build_graph_tab(ctx, case_id)
+            # node_id from the cluster-overview click (cluster:<type>) drives
+            # the graph drill-in; empty / non-cluster ids → overview.
+            content = await _build_graph_tab(ctx, case_id,
+                                             node_id=kwargs.get("node_id"))
         elif tab == "report":
             content = await _build_report_tab(ctx, case_id)
         elif tab == "share":

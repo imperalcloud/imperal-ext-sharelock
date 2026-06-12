@@ -66,9 +66,19 @@ async def post_gap_decision(case_id: int, run_id: int, decision: str,
 
 
 async def get_graph(case_id: int, max_nodes: int = 200, min_mentions: int = 1,
+                    entity_type: str | None = None,
                     agency_id: Optional[str] = None) -> dict:
-    """Cytoscape graph for a case."""
+    """Cytoscape graph for a case.
+
+    ``entity_type`` restricts the subgraph to a single entity type (drill-in
+    from the clustered overview). ``max_nodes`` is bounded server-side to 5000,
+    which covers the largest case (4,917 entities) — at that ceiling the
+    returned ``stats``/edge set are the case's TRUE totals, so the type-cluster
+    fold represents 100 % of the data, not a sample.
+    """
     path = f"/cases/{case_id}/graph?max_nodes={max_nodes}&min_mentions={min_mentions}"
+    if entity_type:
+        path += f"&entity_type={entity_type}"
     resp = await _get(path, agency_id=agency_id)
     return resp if isinstance(resp, dict) else {}
 

@@ -162,8 +162,10 @@ class AnalysisStatus(sdl.Entity):
 
 
 class IntelligenceGraphSummary(sdl.Entity):
-    """get_intelligence_graph result — a SUMMARY (never the raw 2655-node dump):
-    data={"node_count", "edge_count", "top_entities": [...], "note"}. The capped
+    """get_intelligence_graph result — a SUMMARY (never the raw multi-thousand
+    node dump): data={"node_count", "edge_count", "type_count",
+    "type_breakdown": [{type,count}], "top_entities": [...], "note"}. The
+    type_breakdown mirrors the Graph tab's clustered overview; the capped
     top-entity list rides ``top_entities`` (NOT items — this is a single summary
     entity, not an EntityList). kind='intelligence_graph'.
     """
@@ -171,6 +173,8 @@ class IntelligenceGraphSummary(sdl.Entity):
     case_id: Optional[int] = None
     node_count: int = 0
     edge_count: int = 0
+    type_count: int = 0
+    type_breakdown: list[dict[str, Any]] = []
     top_entities: list[dict[str, Any]] = []
     note: Optional[str] = None
 

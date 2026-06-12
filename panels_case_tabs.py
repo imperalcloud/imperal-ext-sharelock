@@ -25,7 +25,7 @@ from cache_models import CaseSummary, thin_case_summary_data
 from case_resolver import load_case_data_from_api
 from panels import _cached_user_cases  # circuit-breaker for Cases API panel reads
 from panels_gap_review import build_gap_review
-from panels_graph import build_graph_panel
+from panels_graph import build_graph_panel, _focus_from_node_id
 
 log = logging.getLogger("sharelock-v2.panels_case")
 
@@ -172,15 +172,19 @@ async def _build_gap_review_tab(ctx, folder_name: str):
     return await build_gap_review(api_case_id, agency_id=_user_agency(ctx))
 
 
-async def _build_graph_tab(ctx, folder_name: str):
-    """Graph tab: delegates to panels_graph (DataTable view, Session A)."""
+async def _build_graph_tab(ctx, folder_name: str, node_id: str | None = None):
+    """Graph tab: clustered overview by default; drill-in when a cluster node
+    (``cluster:<type>``) was clicked. ``node_id`` arrives from the DGraph
+    on_node_click → __panel__dashboard round-trip."""
     api_case = await _get_api_case(ctx, folder_name)
     api_case_id = _resolve_api_case_id(api_case)
     if api_case_id is None:
         return ui.Alert(title="Not Registered",
                         message="Register this folder as a case first.",
                         type="info")
-    return await build_graph_panel(api_case_id, agency_id=_user_agency(ctx))
+    graph_focus = _focus_from_node_id(node_id)
+    return await build_graph_panel(api_case_id, agency_id=_user_agency(ctx),
+                                   graph_focus=graph_focus)
 
 
 async def _build_report_tab(ctx, folder_name: str):

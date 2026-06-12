@@ -21,6 +21,7 @@ from app import chat, _user_agency
 from auth_gate import require_unlock
 from imperal_sdk.chat import ActionResult
 import queries
+from graph_cluster import cluster_graph_by_type
 from models import (
     CaseFileListResponse, CaseDetail, AnalysisStatus, IntelligenceGraphSummary,
     EntityRecord, EntityListResponse,
@@ -157,22 +158,31 @@ async def fn_analysis_status(ctx, params: CaseIdParams) -> ActionResult:
                data_model=IntelligenceGraphSummary,
                description=(
                    "Summarise a case's intelligence graph: entity / relationship "
-                   "counts plus the top entities by mention. Does not dump the "
-                   "full graph — use list_entities / list_relationships to drill in."
+                   "counts, the entity-type breakdown (the clustered overview "
+                   "the Graph tab shows), plus the top entities by mention. Does "
+                   "not dump the full graph — use list_entities / "
+                   "list_relationships to drill in."
                ))
 @require_unlock
 async def fn_get_intelligence_graph(ctx, params: CaseIdParams) -> ActionResult:
-    """Summarise the graph — count nodes/edges + cap the top entities.
-    NEVER dump the full node set (a forensic case can hold 2655+ nodes)."""
+    """Summarise the graph as the clustered overview does: true totals + the
+    per-type breakdown + the top entities. NEVER dump the full node set (a
+    forensic case can hold thousands of nodes)."""
     agency = _user_agency(ctx)
     try:
-        g = await queries.get_graph(params.case_id, max_nodes=200, min_mentions=1,
-                                    agency_id=agency) or {}
+        # max_nodes=5000 covers the largest case, so the fold sees TRUE totals
+        # (every node returned → every edge induced). We fold ext-side and keep
+        # only the tiny summary — the raw graph never enters the result.
+        g = await queries.get_graph(params.case_id, max_nodes=5000,
+                                    min_mentions=1, agency_id=agency) or {}
         raw_nodes = g.get("nodes") or []
         raw_edges = g.get("edges") or []
-        stats = g.get("stats") or {}
-        node_count = int(stats.get("total_entities") or len(raw_nodes))
-        edge_count = int(stats.get("total_edges") or len(raw_edges))
+
+        _, _, meta = cluster_graph_by_type(raw_nodes, raw_edges)
+        node_count = int(meta["total_entities"])
+        edge_count = int(meta["total_relationships"])
+        type_count = int(meta["type_count"])
+        type_breakdown = [{"type": t, "count": c} for t, c in meta["types"]]
 
         def _top(n):
             d = n.get("data") if isinstance(n, dict) and "data" in n else n
@@ -188,11 +198,16 @@ async def fn_get_intelligence_graph(ctx, params: CaseIdParams) -> ActionResult:
         tops = tops[:_LIST_CAP]
         note = (f"showing the top {len(tops)} of {node_count} entities"
                 if node_count > len(tops) else None)
+        top_types = ", ".join(f"{t} {c:,}" for t, c in meta["types"][:5])
         return ActionResult.success(
             data={"case_id": params.case_id, "node_count": node_count,
-                  "edge_count": edge_count, "top_entities": tops, "note": note},
+                  "edge_count": edge_count, "type_count": type_count,
+                  "type_breakdown": type_breakdown,
+                  "top_entities": tops, "note": note},
             summary=(f"Intelligence graph for case {params.case_id}: "
-                     f"{node_count} entities, {edge_count} relationships."
+                     f"{node_count} entities, {edge_count} relationships across "
+                     f"{type_count} type{'s' if type_count != 1 else ''}"
+                     + (f" (top: {top_types})" if top_types else "") + "."
                      + (f" {note}." if note else "")),
         )
     except Exception as e:

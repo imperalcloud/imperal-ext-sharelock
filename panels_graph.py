@@ -1,20 +1,30 @@
 """
-Sharelock v2 — Case Intelligence Graph panel.
+Sharelock v2 — Case Intelligence Graph panel (clustered overview + drill-in).
 
-Renders the entities/relationships subgraph from `/cases/{id}/graph`
-using the SDK ``ui.Graph`` component (Cytoscape-backed on the Panel
-side). Cases API returns Cytoscape-format nodes/edges; ``ui.Graph``
-unwraps them server-side so the Panel just needs to register the
-cytoscape-js renderer.
+The Graph tab must represent the WHOLE case and never hang the browser. A
+forensic case can hold thousands of entities and tens of thousands of edges
+(case 35 = 4,917 entities / 27,103 relationships) — rendering that raw in an
+animated Cytoscape layout WILL freeze the tab.
 
-Federal rigor: graph payload is deterministic for the same case state
-(sort by entity_id/relationship_id in graph_service), so screenshots
-embed cleanly in DOJ-style reports.
+Two views
+---------
+* **Overview (default)** — collapse the full graph into ONE node per entity
+  ``type`` (sized by count) and ONE weighted bundle edge per type-pair
+  (``graph_cluster.cluster_graph_by_type``). Any case folds to ~6-10 nodes +
+  ~15-30 edges → renders instantly, fits the screen, and represents 100 % of
+  the data (totals shown, nothing hidden). Laid out with a NON-animated
+  deterministic ``concentric`` layout (``animate=False``).
+* **Drill-in** — clicking a cluster fires ``__panel__dashboard`` with
+  ``node_id="cluster:<type>"``; the panel re-renders the actual entities OF
+  THAT TYPE (capped at the top 150 by mention_count) with their real edges,
+  using animated ``cose-bilkent`` (a small set animates fine). A "← Back to
+  overview" button returns to the clusters.
 
-Size discipline: Temporal activity-result payload limit is 2 MB. A
-full 500-node / 13k-edge forensic graph exceeds this. We cap fetch to
-a smaller top-N and slim each element to only the fields Cytoscape
-actually needs — everything else stays on the Cases API for drill-down.
+Size discipline: the Temporal activity-result limit is 2 MB. Clusters are
+tiny; the drill-in is capped at 150 nodes — both fit comfortably. We fetch the
+full graph from the Cases API (``max_nodes=5000`` covers the largest case) to
+fold TRUE totals, but only the folded clusters ever enter the serialised UI
+tree — the raw 27 k edges are discarded ext-side after the fold.
 """
 from __future__ import annotations
 
@@ -22,16 +32,18 @@ import logging
 
 from imperal_sdk import ui
 import queries
+from graph_cluster import cluster_graph_by_type
 
 log = logging.getLogger("sharelock-v2.panels_graph")
 
-# Hard caps so the serialised UI tree stays well below Temporal's 2 MB
-# activity result limit (observed: 500 nodes + 13 k edges = ~2.7 MB).
-# 200 top-mention nodes + their induced edges comfortably fits in <500 kB.
-_MAX_NODES_FETCH = 200
-_MIN_MENTIONS = 2            # drop one-off mentions from the overview
-_MAX_EDGES_RENDER = 1500     # belt-and-braces: trim edges by strength if the
-                             # induced subgraph is still dense
+# max_nodes ceiling the Cases API honours (Query le=5000). The largest case has
+# 4,917 entities, so at this ceiling EVERY node is returned and EVERY edge is
+# induced → the fold sees the case's true totals, not a sample.
+_FULL_FETCH_NODES = 5000
+# Drill-in cap: a single type's top-N entities by mention_count. 150 nodes
+# animate fine in cose-bilkent and stay well under the 2 MB envelope.
+_DRILL_NODES = 150
+_DRILL_EDGES_RENDER = 1500
 
 
 def _fmt_int(value) -> str:
@@ -42,7 +54,7 @@ def _fmt_int(value) -> str:
 
 
 def _slim_node(n: dict) -> dict:
-    """Keep only the fields Cytoscape + DGraph renderer need."""
+    """Keep only the fields Cytoscape + DGraph renderer need (drill-in)."""
     data = n.get("data") if isinstance(n, dict) and "data" in n else n
     if not isinstance(data, dict):
         return {}
@@ -53,13 +65,13 @@ def _slim_node(n: dict) -> dict:
     }
     mc = data.get("mention_count")
     if mc is not None:
-        out["size"] = min(50, 10 + int(mc))  # visual size 10..50
+        out["size"] = min(50, 10 + int(mc))
         out["mention_count"] = int(mc)
     return out
 
 
 def _slim_edge(e: dict) -> dict:
-    """Keep only the fields Cytoscape + DGraph renderer need."""
+    """Keep only the fields Cytoscape + DGraph renderer need (drill-in)."""
     data = e.get("data") if isinstance(e, dict) and "data" in e else e
     if not isinstance(data, dict):
         return {}
@@ -72,106 +84,168 @@ def _slim_edge(e: dict) -> dict:
     }
 
 
+def _focus_from_node_id(node_id) -> str | None:
+    """Decode an ``on_node_click`` cluster id (``cluster:<type>``) → type."""
+    if isinstance(node_id, str) and node_id.startswith("cluster:"):
+        return node_id.split(":", 1)[1] or None
+    return None
+
+
+def _back_button(case_id: int) -> ui.UINode:
+    return ui.Button(
+        label="← Back to overview", variant="ghost", size="sm",
+        on_click=ui.Call("__panel__dashboard", tab="graph", section="",
+                         view="", case_id=str(case_id), node_id=""),
+    )
+
+
+def _graph_unavailable(exc: object) -> ui.UINode:
+    return ui.Alert(title="Graph unavailable",
+                    message=f"Could not load graph: {exc}", type="error")
+
+
 async def build_graph_panel(case_id: int,
-                            agency_id: str | None = None) -> ui.UINode:
-    """Build the Intelligence Graph panel for a case."""
+                            agency_id: str | None = None,
+                            graph_focus: str | None = None) -> ui.UINode:
+    """Build the Intelligence Graph panel.
+
+    ``graph_focus`` (an entity type, e.g. ``"phone"``) selects the drill-in
+    view; otherwise the clustered overview is rendered.
+    """
+    if graph_focus:
+        return await _build_drill_in(case_id, graph_focus, agency_id)
+    return await _build_overview(case_id, agency_id)
+
+
+# ── Overview (type clusters) ────────────────────────────────────────────────────
+
+
+async def _build_overview(case_id: int, agency_id: str | None) -> ui.UINode:
     try:
         payload = await queries.get_graph(
-            case_id,
-            max_nodes=_MAX_NODES_FETCH,
-            min_mentions=_MIN_MENTIONS,
-            agency_id=agency_id,
-        )
+            case_id, max_nodes=_FULL_FETCH_NODES, min_mentions=1,
+            agency_id=agency_id)
     except Exception as exc:
-        log.error(f"graph: failed to fetch case_id={case_id}: {exc}")
-        return ui.Alert(
-            title="Graph unavailable",
-            message=f"Could not load graph: {exc}",
-            type="error",
-        )
+        log.error(f"graph overview: fetch failed case_id={case_id}: {exc}")
+        return _graph_unavailable(exc)
+
+    raw_nodes = payload.get("nodes") or []
+    raw_edges = payload.get("edges") or []
+
+    if not raw_nodes:
+        return ui.Stack(children=[ui.Alert(
+            title="No entities yet",
+            message=("Run deep analysis to extract entities and relationships. "
+                     "The Intelligence Graph will populate automatically."),
+            type="info",
+        )], gap=3)
+
+    clusters, bundles, meta = cluster_graph_by_type(raw_nodes, raw_edges)
+
+    total_entities = meta["total_entities"]
+    total_rels = meta["total_relationships"]
+    type_count = meta["type_count"]
+
+    summary = ui.Stats(columns=3, children=[
+        ui.Stat(label="Entities", value=_fmt_int(total_entities),
+                icon="Users", color="blue"),
+        ui.Stat(label="Relationships", value=_fmt_int(total_rels),
+                icon="GitBranch", color="green"),
+        ui.Stat(label="Entity types", value=_fmt_int(type_count),
+                icon="Shapes", color="purple"),
+    ])
+
+    top = ", ".join(f"{t} {c:,}" for t, c in meta["types"][:4])
+    children: list = [summary, ui.Alert(
+        title="Clustered overview",
+        message=(f"{_fmt_int(total_entities)} entities in {type_count} type"
+                 f"{'s' if type_count != 1 else ''}"
+                 + (f" (top: {top})" if top else "")
+                 + ". Click a type to drill in."),
+        type="info",
+    )]
+
+    # Non-animated, deterministic layout that always fits the viewport. The
+    # SDK ui.Graph has no `animate` prop, so inject it into props directly —
+    # the DGraph renderer reads node.props.animate (default true).
+    graph = ui.Graph(
+        nodes=clusters,
+        edges=bundles,
+        layout="concentric",
+        height=700,
+        color_by="type",
+        edge_label_visible=True,
+        min_node_size=30,
+        max_node_size=90,
+        on_node_click=ui.Call("__panel__dashboard", tab="graph", section="",
+                              view="", case_id=str(case_id)),
+    )
+    graph.props["animate"] = False
+    children.append(ui.Section(title="Intelligence Graph", children=[graph]))
+    return ui.Stack(children=children, gap=3)
+
+
+# ── Drill-in (entities of one type) ─────────────────────────────────────────────
+
+
+async def _build_drill_in(case_id: int, etype: str,
+                          agency_id: str | None) -> ui.UINode:
+    try:
+        payload = await queries.get_graph(
+            case_id, max_nodes=_DRILL_NODES, min_mentions=1,
+            entity_type=etype, agency_id=agency_id)
+    except Exception as exc:
+        log.error(f"graph drill-in: fetch failed case_id={case_id} "
+                  f"type={etype}: {exc}")
+        return ui.Stack(children=[_back_button(case_id),
+                                  _graph_unavailable(exc)], gap=3)
 
     raw_nodes = payload.get("nodes") or []
     raw_edges = payload.get("edges") or []
     stats = payload.get("stats") or {}
 
-    if not raw_nodes:
-        return ui.Stack(children=[
-            ui.Alert(
-                title="No entities yet",
-                message=(
-                    "Run deep analysis to extract entities and relationships. "
-                    "The Intelligence Graph will populate automatically."
-                ),
-                type="info",
-            ),
-        ], gap=3)
+    nodes = [n for n in (_slim_node(x) for x in raw_nodes if x) if n.get("id")]
+    edges = [e for e in (_slim_edge(x) for x in raw_edges if x)
+             if e.get("id") and e.get("source") and e.get("target")]
 
-    # Slim every element so each node/edge costs ~60–120 bytes in the
-    # serialised tree instead of the ~250–400 bytes the raw Cases API
-    # payload carries (timestamps, confidence, evidence_count, etc.).
-    nodes = [_slim_node(n) for n in raw_nodes if n]
-    nodes = [n for n in nodes if n.get("id")]
-    edges = [_slim_edge(e) for e in raw_edges if e]
-    edges = [e for e in edges if e.get("id") and e.get("source") and e.get("target")]
-
-    # If the induced subgraph still has a huge edge count, keep the
-    # strongest connections by weight so the viz stays legible.
-    edges_trimmed = False
     total_edges_available = len(edges)
-    if len(edges) > _MAX_EDGES_RENDER:
+    edges_trimmed = False
+    if len(edges) > _DRILL_EDGES_RENDER:
         edges.sort(key=lambda e: e.get("weight") or 0.0, reverse=True)
-        edges = edges[:_MAX_EDGES_RENDER]
+        edges = edges[:_DRILL_EDGES_RENDER]
         edges_trimmed = True
 
-    total_entities_considered = stats.get("total_entities_considered") or len(raw_nodes)
-    total_edges_case = stats.get("total_edges") or total_edges_available
+    total_of_type = stats.get("total_entities_considered") or len(nodes)
+    title = etype.capitalize()
 
-    summary = ui.Stats(columns=4, children=[
-        ui.Stat(
-            label="Entities",
-            value=_fmt_int(stats.get("total_entities", len(nodes))),
-            icon="Users",
-            color="blue",
-        ),
-        ui.Stat(
-            label="Relationships",
-            value=_fmt_int(total_edges_case),
-            icon="GitBranch",
-            color="green",
-        ),
-        ui.Stat(
-            label="Orphans",
-            value=_fmt_int(stats.get("orphan_count", 0)),
-            icon="CircleDashed",
-            color="gray",
-        ),
-        ui.Stat(
-            label="Rendered",
-            value=f"{_fmt_int(len(nodes))} / {_fmt_int(len(edges))}",
-            icon="Eye",
-            color="purple",
-        ),
+    if not nodes:
+        return ui.Stack(children=[
+            _back_button(case_id),
+            ui.Alert(title=f"No {title} entities",
+                     message=f"No entities of type '{etype}' in this case.",
+                     type="info"),
+        ], gap=3)
+
+    summary = ui.Stats(columns=3, children=[
+        ui.Stat(label=f"{title} entities", value=_fmt_int(total_of_type),
+                icon="Users", color="blue"),
+        ui.Stat(label="Rendered", value=_fmt_int(len(nodes)),
+                icon="Eye", color="purple"),
+        ui.Stat(label="Edges", value=_fmt_int(len(edges)),
+                icon="GitBranch", color="green"),
     ])
 
-    children: list = [summary]
-
-    if total_entities_considered > len(nodes) or edges_trimmed:
-        msg_parts = []
-        if total_entities_considered > len(nodes):
-            msg_parts.append(
-                f"Showing the top {len(nodes)} of {total_entities_considered} "
-                f"entities (filtered to ≥{_MIN_MENTIONS} mentions)."
-            )
+    children: list = [_back_button(case_id), summary]
+    if total_of_type > len(nodes) or edges_trimmed:
+        parts = []
+        if total_of_type > len(nodes):
+            parts.append(f"Showing the top {len(nodes)} of "
+                         f"{_fmt_int(total_of_type)} {etype} entities by mention.")
         if edges_trimmed:
-            msg_parts.append(
-                f"Rendering the {len(edges)} strongest of {total_edges_available} "
-                "relationships in the induced subgraph."
-            )
-        children.append(ui.Alert(
-            title="Overview view",
-            message=" ".join(msg_parts),
-            type="info",
-        ))
+            parts.append(f"Rendering the {len(edges)} strongest of "
+                         f"{total_edges_available} edges.")
+        children.append(ui.Alert(title=f"{title} drill-in",
+                                 message=" ".join(parts), type="info"))
 
     graph = ui.Graph(
         nodes=nodes,
@@ -180,6 +254,5 @@ async def build_graph_panel(case_id: int,
         height=700,
         color_by="type",
     )
-    children.append(ui.Section(title="Intelligence Graph", children=[graph]))
-
+    children.append(ui.Section(title=f"{title} relationships", children=[graph]))
     return ui.Stack(children=children, gap=3)
