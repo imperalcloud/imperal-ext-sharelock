@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",

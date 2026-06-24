@@ -211,9 +211,10 @@ class _CacheCtx:
         self.cache = cache
 
 
-def test_locked_verdict_cached_short(monkeypatch):
-    """Asymmetric TTL: unlocked verdicts cache 60s, LOCKED verdicts 10s —
-    a fresh panel sign-in must take effect within seconds."""
+def test_locked_verdict_not_cached(monkeypatch):
+    """A LOCKED verdict is NEVER cached, so a fresh panel sign-in takes effect
+    on the very next check (no stale lock to bounce on); only the UNLOCKED
+    verdict caches (60s)."""
     cache = _RecordingCache()
 
     async def locked(imperal_id):
@@ -221,16 +222,16 @@ def test_locked_verdict_cached_short(monkeypatch):
     monkeypatch.setattr(auth_gate.queries, "get_unlock", locked)
     state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
     assert state.unlocked is False
-    assert cache.sets and cache.sets[-1][2] == 10, (
-        f"locked verdict must cache <=10s, got {cache.sets}")
+    assert cache.sets == [], (
+        f"locked verdict must NOT be cached, got {cache.sets}")
 
     async def unlocked(imperal_id):
         return {"unlocked": True, "agency_id": "agency-x", "role": "admin"}
     monkeypatch.setattr(auth_gate.queries, "get_unlock", unlocked)
     state = asyncio.run(auth_gate._fetch_unlock(_CacheCtx(cache)))
     assert state.unlocked is True
-    assert cache.sets[-1][2] == 60, (
-        f"unlocked verdict must cache 60s, got {cache.sets[-1]}")
+    assert cache.sets and cache.sets[-1][2] == 60, (
+        f"unlocked verdict must cache 60s, got {cache.sets}")
 
 
 def test_cached_verdict_short_circuits_fetch(monkeypatch):

@@ -31,11 +31,12 @@ log = logging.getLogger("sharelock-v2.auth_gate")
 
 PANEL_ROUTE = "/ext/sharelock-v2/signin"
 REGISTER_ROUTE = "/ext/sharelock-v2/register"
-# ctx.cache enforces TTL within [5, 300]. Unlocked verdicts are stable for a
-# minute; LOCKED verdicts must expire fast so a fresh panel sign-in unlocks
-# chat/panels within seconds, not a minute.
+# ctx.cache enforces TTL within [5, 300]. Only the UNLOCKED verdict is cached
+# (60s). A LOCKED verdict is NEVER cached, so a fresh panel sign-in takes effect
+# on the very next check — caching "locked" (even for 10s) made a fast sign-in
+# (password-manager autofill, re-rendering the panel within the window) bounce
+# back to the sign-in card. Forensic product: never serve a stale lock.
 _CACHE_TTL_UNLOCKED = 60
-_CACHE_TTL_LOCKED = 10
 
 
 @ext.cache_model("sharelock_unlock")
@@ -60,9 +61,8 @@ class LockedState(sdl.Entity):
 async def _fetch_unlock(ctx) -> UnlockState:
     """Live unlock state for ``ctx.user`` (cached via ``ctx.cache``).
 
-    Asymmetric TTL: unlocked verdicts cache ≤60s; LOCKED verdicts cache
-    ≤10s (so a fresh panel sign-in takes effect within seconds). Any
-    cached verdict is fresh by construction of the write-side TTL.
+    Only the UNLOCKED verdict is cached (≤60s); a LOCKED verdict is never
+    cached, so a fresh panel sign-in takes effect on the very next check.
 
     No identity, read error, or cache failure all resolve to LOCKED.
     """
@@ -102,13 +102,11 @@ async def _fetch_unlock(ctx) -> UnlockState:
         log.warning(f"unlock read failed (fail-closed): {e}")
         return UnlockState(unlocked=False)
 
-    if cache is not None:
+    # Cache ONLY the UNLOCKED verdict — a LOCKED verdict is never cached so a
+    # fresh sign-in is seen on the very next check (no stale lock to bounce on).
+    if cache is not None and state.unlocked:
         try:
-            await cache.set(
-                key, state,
-                ttl_seconds=(_CACHE_TTL_UNLOCKED if state.unlocked
-                             else _CACHE_TTL_LOCKED),
-            )
+            await cache.set(key, state, ttl_seconds=_CACHE_TTL_UNLOCKED)
         except Exception:
             pass  # cache write failure must never affect the verdict
     return state
