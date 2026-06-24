@@ -126,7 +126,8 @@ async def _build_analysis_tab(ctx, folder_name: str):
         return pa.build_progress_with_controls(progress, api_case_id, run)
 
     if analysis_status == "completed" and outdated:
-        new_files = sum(1 for f in summary.files if f.get("status") == "new")
+        new_files = summary.new_file_count or sum(
+            1 for f in summary.files if f.get("status") == "new")
         return pa.build_outdated(api_case_id, new_files, version)
 
     if analysis_status == "completed":

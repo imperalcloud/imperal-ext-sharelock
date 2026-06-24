@@ -178,7 +178,7 @@ def _fmt_entities(entities: list, lines: list) -> None:
     lines.append(f"\n=== TOP ENTITIES ({len(entities)}) ===")
     for i, e in enumerate(entities[:_MAX_ENTITIES], 1):
         t = e.get("type", "?")
-        v = (e.get("value") or e.get("normalized_value") or "?")[:80]
+        v = str(e.get("value") or e.get("normalized_value") or "?")[:80]
         mc = e.get("mention_count", 0)
         lines.append(f"[E{i}] {t} \"{v}\" (mentions: {mc})")
 

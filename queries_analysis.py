@@ -76,10 +76,10 @@ async def get_graph(case_id: int, max_nodes: int = 200, min_mentions: int = 1,
     returned ``stats``/edge set are the case's TRUE totals, so the type-cluster
     fold represents 100 % of the data, not a sample.
     """
-    path = f"/cases/{case_id}/graph?max_nodes={max_nodes}&min_mentions={min_mentions}"
+    qp: dict = {"max_nodes": max_nodes, "min_mentions": min_mentions}
     if entity_type:
-        path += f"&entity_type={entity_type}"
-    resp = await _get(path, agency_id=agency_id)
+        qp["entity_type"] = entity_type
+    resp = await _get(f"/cases/{case_id}/graph", params=qp, agency_id=agency_id)
     return resp if isinstance(resp, dict) else {}
 
 
@@ -110,13 +110,12 @@ async def list_entities(case_id: int, limit: int = 50,
                         min_mentions: int = 0,
                         agency_id: Optional[str] = None) -> list:
     """List entities ordered by mention_count DESC."""
-    params = [f"limit={limit}"]
+    qp: dict = {"limit": limit}
     if type_filter:
-        params.append(f"type={type_filter}")
+        qp["type"] = type_filter
     if min_mentions > 0:
-        params.append(f"min_mentions={min_mentions}")
-    path = f"/cases/{case_id}/entities?" + "&".join(params)
-    resp = await _get(path, agency_id=agency_id)
+        qp["min_mentions"] = min_mentions
+    resp = await _get(f"/cases/{case_id}/entities", params=qp, agency_id=agency_id)
     return resp if isinstance(resp, list) else []
 
 
@@ -154,13 +153,12 @@ async def list_inspections(case_id: int, limit: int = 500, offset: int = 0,
                            subcategory: str | None = None,
                            agency_id: Optional[str] = None) -> list:
     """List file_inspections rows for a case."""
-    params = [f"limit={limit}", f"offset={offset}"]
+    qp: dict = {"limit": limit, "offset": offset}
     if category:
-        params.append(f"category={category}")
+        qp["category"] = category
     if subcategory:
-        params.append(f"subcategory={subcategory}")
-    path = f"/cases/{case_id}/inspections?" + "&".join(params)
-    resp = await _get(path, agency_id=agency_id)
+        qp["subcategory"] = subcategory
+    resp = await _get(f"/cases/{case_id}/inspections", params=qp, agency_id=agency_id)
     return resp if isinstance(resp, list) else []
 
 

@@ -46,6 +46,10 @@ class CaseSummary(BaseModel):
     analysis_status: str | None = None
     file_count: int = 0
     files: list[dict[str, Any]] = Field(default_factory=list)
+    # Count of files with status=="new" — computed over the FULL listing
+    # before files[] is capped for the cache, so panels report the true
+    # new-evidence count, not a value capped at _MAX_CACHED_FILES.
+    new_file_count: int = 0
     # Optional extras surfaced by panels_case when the skeleton already had them
     analysis_progress: dict[str, Any] | None = None
     analysis_version: str = "1.0"
@@ -113,8 +117,15 @@ def thin_case_summary_data(data: dict) -> dict:
     not the full listing.
     """
     if "files" in data and isinstance(data["files"], list):
-        full_count = len(data["files"])
-        data["files"] = data["files"][:_MAX_CACHED_FILES]
+        full = data["files"]
+        full_count = len(full)
+        # Count new files over the FULL list BEFORE capping — panels read
+        # new_file_count, so the count survives the cache trim.
+        if "new_file_count" not in data:
+            data["new_file_count"] = sum(
+                1 for f in full
+                if isinstance(f, dict) and f.get("status") == "new")
+        data["files"] = full[:_MAX_CACHED_FILES]
         if full_count > _MAX_CACHED_FILES and "file_count" not in data:
             data["file_count"] = full_count
     return data

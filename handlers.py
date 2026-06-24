@@ -307,7 +307,13 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
         result = await queries.create_case(user_id, clean_name,
                                            params.description or "",
                                            agency_id=agency)
-        case_id = result.get("id", "?")
+        case_id = result.get("id")
+        if case_id is None:
+            log.error(f"create_case: Cases API returned no id for "
+                      f"'{clean_name}': {result!r}")
+            return ActionResult.error(
+                "Case creation did not return an ID — please try again.",
+                retryable=True)
 
         try:
             await storage.mkdir(clean_name)

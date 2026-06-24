@@ -130,7 +130,9 @@ async def run_intake(message: str, history: list, case_data: dict, case_id: int,
     system = _load_prompt("intake") + f"\n\nCASE CONTEXT:\n{_build_case_context(case_data, case_id)}"
     if resolution_note:
         system = resolution_note + "\n\n" + system
-    convo = "\n".join(f"{h['role'].upper()}: {h['content']}" for h in history[-10:])
+    convo = "\n".join(
+        f"{str(h.get('role', '')).upper()}: {h.get('content', '')}"
+        for h in history[-10:] if isinstance(h, dict))
     prompt = system + ("\n\n" + convo if convo else "") + f"\nUSER: {message}\nASSISTANT:"
     try:
         result = await ctx.ai.complete(prompt, model=_QA_MODEL, max_tokens=1024)
@@ -215,7 +217,7 @@ async def run_intelligence(message: str, history: list,
 
     context_block = format_grounded_context(ctx_data)
     user_block = (
-        f"\nCURRENT USER: {_user_email(ctx)} (role: {ctx.user.role})"
+        f"\nCURRENT USER: {_user_email(ctx)} (role: {getattr(ctx.user, 'role', 'user')})"
         if ctx and hasattr(ctx, "user") and ctx.user else ""
     )
     system_parts = [_load_prompt("intelligence")]

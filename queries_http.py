@@ -54,12 +54,20 @@ def _raise_for_error(r: httpx.Response) -> None:
         raise CasesAPIError(r.status_code, detail)
 
 
-async def _get(path: str, agency_id: Optional[str] = None):
-    """GET helper. Returns JSON or empty list/dict on 404."""
+async def _get(path: str, agency_id: Optional[str] = None,
+               params: dict | None = None):
+    """GET helper. Returns JSON or empty list/dict on 404.
+
+    Pass query params via ``params`` (httpx URL-encodes them) — NEVER
+    interpolate caller/LLM-supplied strings into the query string of
+    ``path`` (query-param injection / smuggling). ``path`` should carry
+    only typed path segments + server-fixed query keys.
+    """
     async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.get(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id))
+        r = await c.get(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
+                        params=params or None)
         if r.status_code == 404:
-            return [] if "?" in path else {}
+            return [] if ("?" in path or params) else {}
         r.raise_for_status()
         return r.json()
 
