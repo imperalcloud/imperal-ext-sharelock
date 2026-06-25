@@ -27,7 +27,7 @@ class _Ctx:
 
 
 def _patch_state(monkeypatch, **kwargs):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return UnlockState(**kwargs)
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

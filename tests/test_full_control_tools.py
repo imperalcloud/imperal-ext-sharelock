@@ -188,7 +188,7 @@ def _unlock(monkeypatch):
     import auth_gate
     from auth_gate import UnlockState
 
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return UnlockState(unlocked=True, agency_id="default", role="admin")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

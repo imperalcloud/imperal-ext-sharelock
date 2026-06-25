@@ -109,7 +109,9 @@ async def fn_save_agency_settings(ctx, params: SaveAgencySettingsParams) -> Acti
     """Admin-gated merge-then-PUT of the agency settings blob."""
     # Via the module (not a bare-name import) so the gate and the role
     # check share one monkeypatch point — mirrors the existing tests.
-    state = await auth_gate._fetch_unlock(ctx)
+    # force_fresh: authz reads the role LIVE (never the 60s unlock cache) so a
+    # demoted admin cannot save storage credentials within the stale window.
+    state = await auth_gate._fetch_unlock(ctx, force_fresh=True)
     if state.role != "admin":
         return ActionResult.success(
             data={"saved": False, "agency_id": state.agency_id,

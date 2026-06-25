@@ -40,7 +40,7 @@ class _Ctx:
 
 
 def _role(monkeypatch, role):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return auth_gate.UnlockState(unlocked=True, agency_id="acme", role=role)
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

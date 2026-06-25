@@ -58,11 +58,17 @@ class LockedState(sdl.Entity):
     panel_route: str = PANEL_ROUTE
 
 
-async def _fetch_unlock(ctx) -> UnlockState:
+async def _fetch_unlock(ctx, force_fresh: bool = False) -> UnlockState:
     """Live unlock state for ``ctx.user`` (cached via ``ctx.cache``).
 
     Only the UNLOCKED verdict is cached (≤60s); a LOCKED verdict is never
     cached, so a fresh panel sign-in takes effect on the very next check.
+
+    ``force_fresh=True`` bypasses the cache entirely (read AND write) — used
+    for ROLE/authz decisions (``is_admin``) so a privilege change is enforced
+    live, never up to 60s stale. The unlock GATE (``unlock_ok`` / panels)
+    keeps the cache: the unlock state is stable across the 30-day window;
+    only the role is authz-sensitive.
 
     No identity, read error, or cache failure all resolve to LOCKED.
     """
@@ -88,7 +94,7 @@ async def _fetch_unlock(ctx) -> UnlockState:
         cache = None
 
     key = f"sl_unlock:{imperal_id}"
-    if cache is not None:
+    if cache is not None and not force_fresh:
         try:
             cached = await cache.get(key, UnlockState)
             if cached is not None:
@@ -104,7 +110,7 @@ async def _fetch_unlock(ctx) -> UnlockState:
 
     # Cache ONLY the UNLOCKED verdict — a LOCKED verdict is never cached so a
     # fresh sign-in is seen on the very next check (no stale lock to bounce on).
-    if cache is not None and state.unlocked:
+    if cache is not None and state.unlocked and not force_fresh:
         try:
             await cache.set(key, state, ttl_seconds=_CACHE_TTL_UNLOCKED)
         except Exception:
@@ -141,6 +147,18 @@ async def unlock_ok(ctx) -> bool:
     """
     state = await _fetch_unlock(ctx)
     return state.unlocked and _agency_consistent(ctx, state)
+
+
+async def is_admin(ctx) -> bool:
+    """Live admin check for privileged / destructive handlers.
+
+    Reads the unlock state FRESH (``force_fresh``) so a role change takes
+    effect immediately — never trust the 60s unlock cache for an authz
+    decision. Requires a live unlock, agency consistency, AND the admin role.
+    """
+    state = await _fetch_unlock(ctx, force_fresh=True)
+    return (state.unlocked and _agency_consistent(ctx, state)
+            and state.role == "admin")
 
 
 def locked_fact() -> dict:

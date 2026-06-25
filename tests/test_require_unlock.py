@@ -38,7 +38,7 @@ class _Ctx:
 
 
 def _locked(monkeypatch):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return UnlockState(unlocked=False)
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 
@@ -46,7 +46,7 @@ def _locked(monkeypatch):
 def _unlocked(monkeypatch):
     # agency_id matches _User.agency_id — the gate also cross-checks the
     # unlock row's agency against the kernel identity (one-canon rule).
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return UnlockState(unlocked=True, agency_id="default", role="admin")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

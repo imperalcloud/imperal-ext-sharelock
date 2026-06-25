@@ -35,7 +35,7 @@ class _Backend:
 
 
 def _setup(monkeypatch, backend=None):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return auth_gate.UnlockState(unlocked=True, agency_id="acme", role="user")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

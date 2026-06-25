@@ -29,7 +29,7 @@ class _Ctx:
 
 
 def _unlocked(monkeypatch):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return auth_gate.UnlockState(unlocked=True, agency_id="acme", role="user")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 
@@ -136,7 +136,7 @@ def test_list_case_shares_sdl_entity_list_shape(monkeypatch):
 
 
 def test_share_tools_locked_fact_when_locked(monkeypatch):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return auth_gate.UnlockState(unlocked=False)
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 

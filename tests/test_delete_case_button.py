@@ -59,7 +59,7 @@ def _action_kwargs(uiaction):
 
 
 def _role(monkeypatch, role):
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return auth_gate.UnlockState(unlocked=True, agency_id="default", role=role)
     # panels_case imported _fetch_unlock by name → patch the module binding.
     monkeypatch.setattr(pc, "_fetch_unlock", fake)

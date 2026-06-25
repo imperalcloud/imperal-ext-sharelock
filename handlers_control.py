@@ -21,7 +21,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from app import chat, _user_agency
-from auth_gate import require_unlock
+from auth_gate import require_unlock, is_admin
 from imperal_sdk.chat import ActionResult
 import queries
 from queries import CasesAPIError
@@ -148,7 +148,15 @@ async def fn_get_report(ctx, params: GetReportParams) -> ActionResult:
 @require_unlock
 async def fn_delete_case(ctx, params: DeleteCaseParams) -> ActionResult:
     """Delete a case after the kernel-rendered confirmation. Resolves the case
-    first so the receipt carries the verbatim name."""
+    first so the receipt carries the verbatim name.
+
+    Admin-only via a LIVE role check — deleting a case is destructive on a
+    forensic product, so the chat tool enforces the same admin gate the panel
+    shows (the panel only HIDES the button; chat could otherwise bypass it)."""
+    if not await is_admin(ctx):
+        return ActionResult.error(
+            "Deleting a case requires the Sharelock admin role.",
+            retryable=False)
     case_id = params.case_id
     agency = _user_agency(ctx)
     try:

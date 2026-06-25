@@ -167,7 +167,7 @@ def _unlock(monkeypatch):
         imperal_id = "u1"
         agency_id = "default"
 
-    async def fake(ctx):
+    async def fake(ctx, force_fresh=False):
         return U()
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 
