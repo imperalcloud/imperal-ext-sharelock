@@ -128,8 +128,40 @@ async def build_settings_tab(ctx):
         ],
     )
 
+    # ── Team: admin-direct account creation ───────────────────────────────
+    # Sharelock keeps its OWN user store (separate sign-in on top of the
+    # Imperal session). This form creates an account in YOUR agency's store
+    # directly — the alternative invite flow stays available on the sign-in
+    # screen. The handler re-checks the admin role LIVE.
+    team_form = ui.Form(
+        action="sharelock_register_user",
+        submit_label="Create account",
+        children=[
+            ui.Input(param_name="email",
+                     placeholder="New user's email — their sign-in login"),
+            ui.Input(param_name="name",
+                     placeholder="Display name (optional)"),
+            ui.Password(param_name="password",
+                        placeholder="Initial password — leave empty to auto-generate"),
+            ui.Select(param_name="role", value="user", options=[
+                {"value": "user", "label": "User — works cases"},
+                {"value": "admin", "label": "Admin — also manages the agency"},
+            ]),
+        ],
+    )
+    team_section = ui.Section(title="Team", children=[
+        ui.Text("Register a Sharelock account for a colleague in your "
+                "agency. Sharelock has its own sign-in on top of Imperal: "
+                "the new user signs in with this email and password on the "
+                "Sharelock sign-in screen. If you leave the password empty, "
+                "a strong one is generated and shown to you ONCE — hand it "
+                "over securely and have them treat it as temporary."),
+        team_form,
+    ])
+
     return ui.Stack(children=[
         current_section,
+        team_section,
         ui.Section(title="Update settings", children=[
             form,
             ui.Text("Empty fields keep the current values. Passwords are "

@@ -342,4 +342,12 @@ async def panel_sidebar(ctx, section: str = "", **kwargs):
 
     files_section = ui.Section(title=f"Files ({file_count})", children=files_children)
 
-    return ui.Stack(children=[cases_section, files_section])
+    # Sign out lives on the ALWAYS-VISIBLE surface every unlocked user has
+    # (settings is admin-only): ends the unlock early; the next render of any
+    # Sharelock surface shows the sign-in placeholder.
+    account_section = ui.Section(title="Account", children=[
+        ui.Button(label="Sign out of Sharelock", variant="ghost", icon="LogOut",
+                  on_click=ui.Call("sharelock_sign_out")),
+    ])
+
+    return ui.Stack(children=[cases_section, files_section, account_section])

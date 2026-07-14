@@ -112,6 +112,34 @@ async def get_unlock(imperal_id: str) -> dict:
     return resp if isinstance(resp, dict) else {"unlocked": False}
 
 
+async def delete_unlock(imperal_id: str) -> dict:
+    """Sign the user out of Sharelock (DELETE /auth/unlock/{imperal_id}).
+
+    The Cases API EXPIRES the unlock row (no DELETE grant needed) — the next
+    ``get_unlock`` read returns ``{"unlocked": False}``. Idempotent:
+    ``{"signed_out": False}`` when there was no live unlock.
+    """
+    resp = await _delete(f"/auth/unlock/{imperal_id}")
+    return resp if isinstance(resp, dict) else {"signed_out": False}
+
+
+async def create_sharelock_user(email: str, password: str, role: str,
+                                agency_id: str, name: str = "",
+                                imperal_id: str = "") -> dict:
+    """Admin-direct Sharelock account creation (POST /auth/users).
+
+    The caller (handlers_account.fn_register_user) enforces the LIVE admin
+    check and supplies the ISSUING ADMIN's agency_id — created users carry
+    the issuer's agency, mirroring the invite rule. The Cases API hashes the
+    password panel-compatibly (scrypt) and applies the same duplicate guards
+    as the invite flow (409 = account already exists).
+    """
+    return await _post("/auth/users", {
+        "email": email, "password": password, "role": role,
+        "agency_id": agency_id, "name": name, "imperal_id": imperal_id,
+    })
+
+
 # ── Agency storage settings (Track B) ─────────────────────────────────────────
 
 

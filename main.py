@@ -18,6 +18,7 @@ _MODULES = (
     "handlers", "handlers_analysis",
     "handlers_share", "handlers_files", "handlers_admin",
     "handlers_control", "handlers_drilldown", "handlers_intel",
+    "handlers_account",
     "files", "panels", "panels_case", "panels_case_tabs", "panels_analysis",
     "panels_gap_review", "panels_graph",
     "panels_share", "panels_settings",
@@ -43,6 +44,7 @@ import handlers_admin  # noqa: E402, F401 — save_agency_settings chat tool (ad
 import handlers_control  # noqa: E402, F401 — get_report + deletes + update_case (Track D)
 import handlers_drilldown  # noqa: E402, F401 — D4 read drill-down (files/detail/status/graph/entities)
 import handlers_intel  # noqa: E402, F401 — D4 intel drill-down (rel/events/taxonomy/audit/runs)
+import handlers_account  # noqa: E402, F401 — sign-out + admin user registration
 import skeleton  # noqa: E402, F401 — registers @ext.skeleton section
 import panels  # noqa: E402, F401 — registers left panel
 import panels_case  # noqa: E402, F401 — registers right panel

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.8.3",
+  "version": "3.9.0",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -997,7 +997,7 @@
     },
     {
       "name": "run_analysis",
-      "description": "Start deep forensic analysis on a case",
+      "description": "Start deep forensic analysis on a case. If the case was ALREADY analyzed, this asks the user to confirm a re-run first (pass confirm=true only after they say yes); if a run is already in progress or paused at gap review, it reports that instead of starting a duplicate.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -1010,16 +1010,22 @@
             "description": "Case ID",
             "title": "Case Id",
             "type": "integer"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true ONLY when the user has explicitly confirmed re-running an already-completed analysis (e.g. replied yes to the re-run question). Leave false otherwise — the handler will ask the user to confirm before starting a fresh run on a case that was already analyzed.",
+            "title": "Confirm",
+            "type": "boolean"
           }
         },
         "required": [
           "case_id"
         ],
-        "title": "CaseIdParams",
+        "title": "RunAnalysisParams",
         "type": "object"
       },
       "return_schema": {
-        "description": "run_analysis receipt (handlers_analysis.py: data={\"case_id\", \"status\",\n\"run_id\", \"version\"}) — a canonical SDL entity for one analysis run.\nCanonical id <- ``run_id`` (falling back to ``case_id``); title <- run label.\n``run_id``/``version`` come straight from the Cases API start response and may\nbe absent on a partial response. All fields kept verbatim.",
+        "description": "run_analysis receipt — a canonical SDL entity for one analysis run.\n\nThe handler emits one of several decision FACTS via the ``action``\ndiscriminator (handlers_analysis.fn_run_analysis):\n  - ``started``              data={\"case_id\",\"status\",\"version\",\"workflow_id\"}\n  - ``confirm_rerun``        data={\"case_id\",\"status\",\"already_version\",\"completed_at\"}\n  - ``already_running``      data={\"case_id\",\"status\",\"version\"}\n  - ``awaiting_gap_decision`` data={\"case_id\",\"status\",\"already_version\"}\nEvery key is modelled as an additive Optional field so the kernel's V24\ndata_model validation accepts all four shapes. Canonical id <- ``run_id``\n(falling back to ``case_id``); title <- run label. ``run_id``/``version``\ncome straight from the Cases API start response and may be absent on a\npartial response.",
         "properties": {
           "id": {
             "anyOf": [
@@ -1130,6 +1136,57 @@
             ],
             "default": null,
             "title": "Version"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Action"
+          },
+          "already_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Already Version"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Completed At"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workflow Id"
           }
         },
         "required": [
@@ -4217,7 +4274,7 @@
     },
     {
       "name": "get_intelligence_graph",
-      "description": "Summarise a case's intelligence graph: entity / relationship counts plus the top entities by mention. Does not dump the full graph — use list_entities / list_relationships to drill in.",
+      "description": "Summarise a case's intelligence graph: entity / relationship counts, the entity-type breakdown (the clustered overview the Graph tab shows), plus the top entities by mention. Does not dump the full graph — use list_entities / list_relationships to drill in.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -4237,7 +4294,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "get_intelligence_graph result — a SUMMARY (never the raw 2655-node dump):\ndata={\"node_count\", \"edge_count\", \"top_entities\": [...], \"note\"}. The capped\ntop-entity list rides ``top_entities`` (NOT items — this is a single summary\nentity, not an EntityList). kind='intelligence_graph'.",
+        "description": "get_intelligence_graph result — a SUMMARY (never the raw multi-thousand\nnode dump): data={\"node_count\", \"edge_count\", \"type_count\",\n\"type_breakdown\": [{type,count}], \"top_entities\": [...], \"note\"}. The\ntype_breakdown mirrors the Graph tab's clustered overview; the capped\ntop-entity list rides ``top_entities`` (NOT items — this is a single summary\nentity, not an EntityList). kind='intelligence_graph'.",
         "properties": {
           "id": {
             "anyOf": [
@@ -4328,6 +4385,20 @@
             "default": 0,
             "title": "Edge Count",
             "type": "integer"
+          },
+          "type_count": {
+            "default": 0,
+            "title": "Type Count",
+            "type": "integer"
+          },
+          "type_breakdown": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Type Breakdown",
+            "type": "array"
           },
           "top_entities": {
             "default": [],
@@ -6070,6 +6141,123 @@
         "title": "AnalysisRunListResponse",
         "type": "object",
         "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_sign_out",
+      "description": "Sign out of Sharelock (end the current Sharelock unlock for this user). The Imperal session itself stays signed in — only Sharelock locks until the next sign-in.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "update:sharelock_unlock"
+      ],
+      "id_projection": "",
+      "params_schema": {},
+      "return_schema": {
+        "description": "Outcome of a Sharelock sign-out.",
+        "properties": {
+          "signed_out": {
+            "default": false,
+            "title": "Signed Out",
+            "type": "boolean"
+          },
+          "was_unlocked": {
+            "default": false,
+            "title": "Was Unlocked",
+            "type": "boolean"
+          }
+        },
+        "title": "SignOutResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_register_user",
+      "description": "Register a new Sharelock user account (admin only). Creates the account in this agency's Sharelock user store; the new user then signs in themselves at the Sharelock sign-in. Leave password empty to auto-generate.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "create:sharelock_user"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "email": {
+            "description": "New user's email — their Sharelock sign-in login. Pass VERBATIM.",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "Display name (optional). Pass VERBATIM; empty = derived from email.",
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "default": "",
+            "description": "Initial password (min 10 chars). LEAVE EMPTY to auto-generate a strong one — it is returned ONCE in the result for the admin to hand to the user.",
+            "title": "Password",
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "description": "Sharelock role: 'user' (default) or 'admin'.",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "RegisterUserParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of an admin user registration.",
+        "properties": {
+          "created": {
+            "default": false,
+            "title": "Created",
+            "type": "boolean"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "title": "Role",
+            "type": "string"
+          },
+          "agency_id": {
+            "default": "",
+            "title": "Agency Id",
+            "type": "string"
+          },
+          "generated_password": {
+            "default": "",
+            "title": "Generated Password",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "RegisterUserResult",
+        "type": "object"
       },
       "event": "",
       "background": false,
