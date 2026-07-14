@@ -73,7 +73,7 @@ async def fn_share_case(ctx, params: ShareCaseParams) -> ActionResult:
                                   retryable=False)
     agency = _user_agency(ctx)
     try:
-        case = await queries.get_case(params.case_id, agency_id=agency)
+        case = await queries.get_case(params.case_id, agency_id=agency, caller_imperal_id=_user_id(ctx))
         if not case or not case.get("name"):
             return ActionResult.error(f"Case {params.case_id} not found.",
                                       retryable=False)

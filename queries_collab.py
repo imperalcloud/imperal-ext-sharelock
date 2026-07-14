@@ -139,6 +139,33 @@ async def create_invite(agency_id: str, created_by_imperal_id: str,
     })
 
 
+async def list_sharelock_users(agency_id: str) -> list:
+    """List the agency's Sharelock users (GET /users). The caller
+    (handlers_account.fn_list_users) enforces the admin role; the Cases API
+    scopes by agency so an admin never sees another agency's users."""
+    resp = await _get("/users", agency_id=agency_id)
+    return resp if isinstance(resp, list) else []
+
+
+async def admin_update_user(user_id: int, agency_id: str,
+                            role: Optional[str] = None,
+                            is_active: Optional[bool] = None) -> dict:
+    """Change a user's role / active flag (PATCH /users/{id}). Agency-scoped
+    server-side; deactivation expires any live unlock."""
+    body: dict = {}
+    if role is not None:
+        body["role"] = role
+    if is_active is not None:
+        body["is_active"] = is_active
+    return await _patch(f"/users/{user_id}", body, agency_id=agency_id)
+
+
+async def admin_delete_user(user_id: int, agency_id: str) -> dict:
+    """Revoke a user's Sharelock access (DELETE /users/{id}). The row is
+    retained (forensic audit); access is revoked and live unlocks expired."""
+    return await _delete(f"/users/{user_id}", agency_id=agency_id)
+
+
 async def create_sharelock_user(email: str, password: str, role: str,
                                 agency_id: str, name: str = "",
                                 imperal_id: str = "") -> dict:

@@ -22,8 +22,12 @@ _BASE_HEADERS = {"x-api-key": CASES_API_KEY, "Content-Type": "application/json"}
 _TIMEOUT = 60.0
 
 
-def _hdrs(agency_id: Optional[str] = None) -> dict:
-    """Build request headers. Attaches X-Imperal-Agency-ID if supplied.
+def _hdrs(agency_id: Optional[str] = None,
+         caller_imperal_id: Optional[str] = None) -> dict:
+    """Build request headers. Attaches X-Imperal-Agency-ID if supplied, and
+    X-Imperal-User-ID (the acting user) when supplied — the Cases API uses
+    the latter to enforce per-user case visibility on direct access. Omitted
+    for system callers (analysis worker) so their behaviour is unchanged.
 
     Never raises on None — rollout tolerates missing agency_id and the Cases
     API logs a warning server-side.
@@ -31,6 +35,8 @@ def _hdrs(agency_id: Optional[str] = None) -> dict:
     h = dict(_BASE_HEADERS)
     if agency_id:
         h["X-Imperal-Agency-ID"] = str(agency_id)
+    if caller_imperal_id:
+        h["X-Imperal-User-ID"] = str(caller_imperal_id)
     return h
 
 
@@ -55,7 +61,8 @@ def _raise_for_error(r: httpx.Response) -> None:
 
 
 async def _get(path: str, agency_id: Optional[str] = None,
-               params: dict | None = None):
+               params: dict | None = None,
+               caller_imperal_id: Optional[str] = None):
     """GET helper. Returns JSON or empty list/dict on 404.
 
     Pass query params via ``params`` (httpx URL-encodes them) — NEVER
@@ -64,7 +71,8 @@ async def _get(path: str, agency_id: Optional[str] = None,
     only typed path segments + server-fixed query keys.
     """
     async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-        r = await c.get(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
+        r = await c.get(f"{CASES_API_URL}{path}",
+                        headers=_hdrs(agency_id, caller_imperal_id),
                         params=params or None)
         if r.status_code == 404:
             return [] if ("?" in path or params) else {}

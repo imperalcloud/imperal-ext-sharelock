@@ -198,10 +198,10 @@ def test_get_report_no_run_is_success_fact(monkeypatch):
     import queries
     _unlock(monkeypatch)
 
-    async def no_analysis(case_id, agency_id=None):
+    async def no_analysis(case_id, agency_id=None, caller_imperal_id=None):
         return {"id": case_id, "name": "Alex Case 1", "active_run_id": None}
 
-    async def no_run(case_id, agency_id=None):
+    async def no_run(case_id, agency_id=None, caller_imperal_id=None):
         return {}
     monkeypatch.setattr(queries, "get_case", no_analysis)
     monkeypatch.setattr(queries, "get_analysis", no_analysis)
@@ -219,14 +219,14 @@ def test_get_report_signs_url(monkeypatch):
     import queries
     _unlock(monkeypatch)
 
-    async def case(case_id, agency_id=None):
+    async def case(case_id, agency_id=None, caller_imperal_id=None):
         return {"id": case_id, "name": "Alex Case 1",
                 "active_run_id": 99, "analysis_status": "completed"}
 
-    async def analysis(case_id, agency_id=None):
+    async def analysis(case_id, agency_id=None, caller_imperal_id=None):
         return {"status": "completed", "active_run_id": 99}
 
-    async def latest(case_id, agency_id=None):
+    async def latest(case_id, agency_id=None, caller_imperal_id=None):
         return {"run_id": 99, "status": "completed", "version": 3}
 
     async def sign(case_id, run_id, fmt="pdf", ttl=600, agency_id=None):
@@ -255,18 +255,18 @@ def test_get_report_prefers_analysis_status_over_case_status(monkeypatch):
     import queries
     _unlock(monkeypatch)
 
-    async def case(case_id, agency_id=None):
+    async def case(case_id, agency_id=None, caller_imperal_id=None):
         # active_run_id is set; case status is the lifecycle 'active'
         return {"id": case_id, "name": "Case 3812",
                 "active_run_id": 21522, "status": "active"}
 
-    async def analysis(case_id, agency_id=None):
+    async def analysis(case_id, agency_id=None, caller_imperal_id=None):
         # the precedence trap: status='active' (case) BEFORE
         # analysis_status='completed' (analysis)
         return {"status": "active", "analysis_status": "completed",
                 "active_run_id": 21522}
 
-    async def latest(case_id, agency_id=None):
+    async def latest(case_id, agency_id=None, caller_imperal_id=None):
         return {"run_id": 21522, "status": "completed", "version": 1}
 
     async def sign(case_id, run_id, fmt="pdf", ttl=600, agency_id=None):
@@ -293,10 +293,10 @@ def test_delete_case_calls_api(monkeypatch):
     _unlock(monkeypatch)
     calls = {}
 
-    async def case(case_id, agency_id=None):
+    async def case(case_id, agency_id=None, caller_imperal_id=None):
         return {"id": case_id, "name": "Old Case"}
 
-    async def delete(case_id, agency_id=None):
+    async def delete(case_id, agency_id=None, caller_imperal_id=None):
         calls["deleted"] = (case_id, agency_id)
         return {"deleted": True}
     monkeypatch.setattr(queries, "get_case", case)
@@ -334,7 +334,7 @@ def test_list_case_files_caps_and_totals(monkeypatch):
     rows = [{"id": i, "filename": f"f{i}.pdf", "size": 10, "mime_type": "application/pdf"}
             for i in range(120)]
 
-    async def files(case_id, agency_id=None):
+    async def files(case_id, agency_id=None, caller_imperal_id=None):
         return rows
     monkeypatch.setattr(queries, "get_files", files)
 
@@ -399,7 +399,7 @@ def test_get_audit_log_is_chain_of_custody(monkeypatch):
     async def audit(case_id, limit=50, agency_id=None):
         return rows[:limit]
 
-    async def verify(case_id, agency_id=None):
+    async def verify(case_id, agency_id=None, caller_imperal_id=None):
         # Real Cases API key is chain_valid (not valid/verified)
         return {"chain_valid": True, "total_entries": 60}
     monkeypatch.setattr(queries, "get_audit_log", audit)

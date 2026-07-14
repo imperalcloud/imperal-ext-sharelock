@@ -25,7 +25,7 @@ from panels_case_tabs import (
     _resolve_api_case_id,
 )
 from panels_share import build_share_tab
-from panels_settings import build_settings_tab
+from panels_settings import build_settings_tab, build_team_invite_tab
 
 log = logging.getLogger("sharelock-v2.panels_case")
 
@@ -126,6 +126,18 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
                          on_click=ui.Call("__panel__dashboard", tab="analysis",
                                           section="", view="", case_id=case_id))
         return ui.Stack(children=[back, content])
+
+    # ── Team: mint an invite code and show it IN the panel (admin only) ──
+    if tab == "team_invite":
+        if not is_admin:
+            return ui.Alert(title="Admin Only",
+                            message="Minting invites requires the Sharelock admin role.",
+                            type="info")
+        try:
+            return await build_team_invite_tab(ctx)
+        except Exception as exc:
+            log.error(f"Panel tab 'team_invite' error: {exc}")
+            return ui.Alert(title="Error", message=str(exc)[:300], type="error")
 
     # ── No case selected ──────────────────────────────────────────────────
     if not case_id:

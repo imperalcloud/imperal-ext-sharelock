@@ -49,6 +49,44 @@ class RegisterUserResult(BaseModel):
     reason: str = ""
 
 
+class SharelockUser(BaseModel):
+    """One Sharelock user row for the admin console."""
+    id: int = 0
+    email: str = ""
+    name: str = ""
+    role: str = "user"
+    is_active: bool = True
+    imperal_id: str = ""
+    case_count: int = 0
+
+
+class UserListResult(BaseModel):
+    users: list[SharelockUser] = Field(default_factory=list)
+    count: int = 0
+    reason: str = ""
+
+
+class UserAdminParams(BaseModel):
+    user_id: int = Field(..., description="Sharelock user id (from the user list).")
+    role: str = Field("", description="New role: 'user' or 'admin'. Empty = leave unchanged.")
+    is_active: str = Field("", description=(
+        "'active' or 'disabled' to change the account state; empty = unchanged."
+    ))
+
+
+class UserDeleteParams(BaseModel):
+    user_id: int = Field(..., description="Sharelock user id to revoke access for.")
+
+
+class UserAdminResult(BaseModel):
+    ok: bool = False
+    user_id: int = 0
+    email: str = ""
+    role: str = "user"
+    is_active: bool = True
+    reason: str = ""
+
+
 class InviteUserResult(BaseModel):
     """Outcome of minting a registration invite code."""
     created: bool = False
@@ -276,3 +314,142 @@ async def fn_register_user(ctx, params: RegisterUserParams) -> ActionResult:
     else:
         summary += " They can sign in with the password you set."
     return ActionResult.success(data=result.model_dump(), summary=summary)
+
+
+# ── Admin user management (list / edit role+state / revoke) ────────────────────
+
+
+async def _require_admin(ctx):
+    """Return the live UnlockState if the caller is a Sharelock admin, else
+    None. force_fresh: authz reads the role LIVE (never the 60s cache)."""
+    state = await auth_gate._fetch_unlock(ctx, force_fresh=True)
+    return state if state.role == "admin" else None
+
+
+@chat.function("sharelock_list_users", action_type="read",
+               data_model=UserListResult,
+               description=(
+                   "List the Sharelock users in your agency (admin only) — "
+                   "email, role, active state, and how many cases each owns."
+               ))
+@auth_gate.require_unlock
+async def fn_list_users(ctx, params: EmptyParams) -> ActionResult:
+    state = await _require_admin(ctx)
+    if state is None:
+        return ActionResult.success(
+            data=UserListResult(reason="admin_role_required").model_dump(),
+            summary="Listing Sharelock users requires the Sharelock admin role.")
+    try:
+        rows = await queries.list_sharelock_users(state.agency_id)
+    except Exception as e:
+        log.warning(f"list_users failed: {e}")
+        return ActionResult.error(
+            "Could not load the user list — the Cases service did not "
+            "respond. Try again.", retryable=True)
+    users = [SharelockUser(
+        id=int(r.get("id") or 0), email=str(r.get("email") or ""),
+        name=str(r.get("name") or ""), role=str(r.get("role") or "user"),
+        is_active=bool(r.get("is_active")),
+        imperal_id=str(r.get("imperal_id") or ""),
+        case_count=int(r.get("case_count") or 0),
+    ) for r in rows]
+    return ActionResult.success(
+        data=UserListResult(users=users, count=len(users)).model_dump(),
+        summary=f"{len(users)} Sharelock user(s) in agency {state.agency_id}.")
+
+
+@chat.function("sharelock_update_user", action_type="write",
+               effects=["update:sharelock_user"],
+               data_model=UserAdminResult,
+               description=(
+                   "Change a Sharelock user's role ('user'/'admin') or state "
+                   "('active'/'disabled') (admin only). Disabling a user "
+                   "signs them out immediately."
+               ))
+@auth_gate.require_unlock
+async def fn_update_user(ctx, params: UserAdminParams) -> ActionResult:
+    state = await _require_admin(ctx)
+    if state is None:
+        return ActionResult.success(
+            data=UserAdminResult(reason="admin_role_required").model_dump(),
+            summary="Changing Sharelock users requires the Sharelock admin role.")
+    role = (params.role or "").strip().lower()
+    if role and role not in ("user", "admin"):
+        return ActionResult.error("Role must be 'user' or 'admin'.", retryable=False)
+    active_raw = (params.is_active or "").strip().lower()
+    is_active = None
+    if active_raw in ("active", "enabled", "true", "1", "yes"):
+        is_active = True
+    elif active_raw in ("disabled", "inactive", "false", "0", "no"):
+        is_active = False
+    elif active_raw:
+        return ActionResult.error(
+            "State must be 'active' or 'disabled'.", retryable=False)
+    if not role and is_active is None:
+        return ActionResult.error(
+            "Nothing to change — set a role and/or a state.", retryable=False)
+    try:
+        row = await queries.admin_update_user(
+            params.user_id, state.agency_id,
+            role=role or None, is_active=is_active)
+    except queries.CasesAPIError as e:
+        if getattr(e, "status", None) == 404:
+            return ActionResult.error(
+                "No such user in your agency.", retryable=False)
+        return ActionResult.error(
+            "Update did not complete — the Cases service refused it.",
+            retryable=True)
+    except Exception as e:
+        log.warning(f"update_user failed: {e}")
+        return ActionResult.error(
+            "Update did not complete — the Cases service did not respond. "
+            "Try again.", retryable=True)
+    res = UserAdminResult(
+        ok=True, user_id=int(row.get("id") or params.user_id),
+        email=str(row.get("email") or ""), role=str(row.get("role") or "user"),
+        is_active=bool(row.get("is_active")))
+    return ActionResult.success(
+        data=res.model_dump(),
+        summary=(f"Updated {res.email or ('user #' + str(res.user_id))}: "
+                 f"role={res.role}, {'active' if res.is_active else 'disabled'}."))
+
+
+@chat.function("sharelock_delete_user", action_type="destructive",
+               effects=["delete:sharelock_user"],
+               data_model=UserAdminResult,
+               description=(
+                   "Revoke a Sharelock user's access (admin only). The "
+                   "account can no longer sign in and any active session ends; "
+                   "the record is retained for the audit trail. Cannot remove "
+                   "the agency's last admin."
+               ))
+@auth_gate.require_unlock
+async def fn_delete_user(ctx, params: UserDeleteParams) -> ActionResult:
+    state = await _require_admin(ctx)
+    if state is None:
+        return ActionResult.success(
+            data=UserAdminResult(reason="admin_role_required").model_dump(),
+            summary="Revoking Sharelock users requires the Sharelock admin role.")
+    try:
+        await queries.admin_delete_user(params.user_id, state.agency_id)
+    except queries.CasesAPIError as e:
+        if getattr(e, "status", None) == 409:
+            return ActionResult.success(
+                data=UserAdminResult(user_id=params.user_id,
+                                     reason="last_admin").model_dump(),
+                summary="Cannot revoke the agency's last active admin.")
+        if getattr(e, "status", None) == 404:
+            return ActionResult.error(
+                "No such user in your agency.", retryable=False)
+        return ActionResult.error(
+            "Revoke did not complete — the Cases service refused it.",
+            retryable=True)
+    except Exception as e:
+        log.warning(f"delete_user failed: {e}")
+        return ActionResult.error(
+            "Revoke did not complete — the Cases service did not respond. "
+            "Try again.", retryable=True)
+    return ActionResult.success(
+        data=UserAdminResult(ok=True, user_id=params.user_id,
+                             is_active=False).model_dump(),
+        summary=f"Access revoked for Sharelock user #{params.user_id}.")

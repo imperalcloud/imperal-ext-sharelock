@@ -39,7 +39,7 @@ def _setup(monkeypatch, backend=None):
         return auth_gate.UnlockState(unlocked=True, agency_id="acme", role="user")
     monkeypatch.setattr(auth_gate, "_fetch_unlock", fake)
 
-    async def get_case(case_id, agency_id=None):
+    async def get_case(case_id, agency_id=None, caller_imperal_id=None):
         assert agency_id == "acme"
         return {"id": case_id, "name": "CaseU"}
     monkeypatch.setattr(hf.queries, "get_case", get_case)
@@ -136,7 +136,7 @@ def test_upload_empty_payload_fact(monkeypatch):
 def test_upload_unknown_case_is_error(monkeypatch):
     _setup(monkeypatch)
 
-    async def get_case(case_id, agency_id=None):
+    async def get_case(case_id, agency_id=None, caller_imperal_id=None):
         return {}
     monkeypatch.setattr(hf.queries, "get_case", get_case)
     res = asyncio.run(hf.fn_upload_case_files(

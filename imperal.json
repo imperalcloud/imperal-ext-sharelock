@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.9.2",
+  "version": "3.9.3",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -6337,6 +6337,234 @@
           }
         },
         "title": "RegisterUserResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_list_users",
+      "description": "List the Sharelock users in your agency (admin only) — email, role, active state, and how many cases each owns.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "description": "Federal V17 placeholder for handlers that take no parameters.\n\n`@chat.function` MUST declare a Pydantic params model — this is the\ncanonical empty model reused by read-only handlers (list_*, sync_*,\n*_health) that don't need any input.",
+        "properties": {},
+        "title": "EmptyParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "SharelockUser": {
+            "description": "One Sharelock user row for the admin console.",
+            "properties": {
+              "id": {
+                "default": 0,
+                "title": "Id",
+                "type": "integer"
+              },
+              "email": {
+                "default": "",
+                "title": "Email",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "role": {
+                "default": "user",
+                "title": "Role",
+                "type": "string"
+              },
+              "is_active": {
+                "default": true,
+                "title": "Is Active",
+                "type": "boolean"
+              },
+              "imperal_id": {
+                "default": "",
+                "title": "Imperal Id",
+                "type": "string"
+              },
+              "case_count": {
+                "default": 0,
+                "title": "Case Count",
+                "type": "integer"
+              }
+            },
+            "title": "SharelockUser",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/$defs/SharelockUser"
+            },
+            "title": "Users",
+            "type": "array"
+          },
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "UserListResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_update_user",
+      "description": "Change a Sharelock user's role ('user'/'admin') or state ('active'/'disabled') (admin only). Disabling a user signs them out immediately.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "update:sharelock_user"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "user_id": {
+            "description": "Sharelock user id (from the user list).",
+            "title": "User Id",
+            "type": "integer"
+          },
+          "role": {
+            "default": "",
+            "description": "New role: 'user' or 'admin'. Empty = leave unchanged.",
+            "title": "Role",
+            "type": "string"
+          },
+          "is_active": {
+            "default": "",
+            "description": "'active' or 'disabled' to change the account state; empty = unchanged.",
+            "title": "Is Active",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "UserAdminParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "ok": {
+            "default": false,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "user_id": {
+            "default": 0,
+            "title": "User Id",
+            "type": "integer"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "title": "Role",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "UserAdminResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_delete_user",
+      "description": "Revoke a Sharelock user's access (admin only). The account can no longer sign in and any active session ends; the record is retained for the audit trail. Cannot remove the agency's last admin.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "delete:sharelock_user"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "user_id": {
+            "description": "Sharelock user id to revoke access for.",
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "UserDeleteParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "ok": {
+            "default": false,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "user_id": {
+            "default": 0,
+            "title": "User Id",
+            "type": "integer"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "title": "Role",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "UserAdminResult",
         "type": "object"
       },
       "event": "",

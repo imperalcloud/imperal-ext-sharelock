@@ -13,7 +13,7 @@ import posixpath
 
 from pydantic import BaseModel, Field
 
-from app import chat, _user_agency
+from app import chat, _user_agency, _user_id
 from auth_gate import require_unlock
 from imperal_sdk.chat import ActionResult
 import files
@@ -104,7 +104,7 @@ async def fn_upload_case_files(ctx, params: UploadCaseFilesParams) -> ActionResu
 
     agency = _user_agency(ctx)
     try:
-        case = await queries.get_case(case_id, agency_id=agency)
+        case = await queries.get_case(case_id, agency_id=agency, caller_imperal_id=_user_id(ctx))
     except Exception as e:
         return ActionResult.error(f"Could not resolve case {case_id}: {e}")
     if not case or not case.get("name"):

@@ -46,6 +46,10 @@ _CASE_THIN_KEYS = (
     "id", "name", "agency_id", "analysis_status", "analysis_version",
     "active_run_id", "analysis_updated_at", "confidence_score_current",
     "confidence_score_potential", "status", "created_at",
+    # Creator identity (Cases API enriches list/get with these) so the
+    # sidebar can show WHO created each case — essential once an admin sees
+    # every agency case and users see cases shared with them.
+    "creator_email", "creator_name", "creator_imperal_id",
 )
 
 
@@ -288,30 +292,43 @@ async def panel_sidebar(ctx, section: str = "", **kwargs):
     user_id = _user_id(ctx)
     active_folder = section or ""
 
-    # ── Cases from Nextcloud ──────────────────────────────────────────────
-    nc_folders = await _cached_nc_folders(ctx)
-
-    # Cached fast-or-stale path — Cases API may be overloaded by
-    # session-worker analysis traffic; panel must not block.
+    # ── Cases (visibility-scoped by the Cases API) ────────────────────────
+    # The list comes from GET /cases?user_id= which is authoritative for
+    # visibility: a regular user sees ONLY the cases they OWN or that were
+    # SHARED with them; a Sharelock admin sees every case in the agency.
+    # (Previously the sidebar listed raw Nextcloud folders — the agency's
+    # shared storage — so everyone saw every case. 2026-07-14.)
     api_cases = await _cached_user_cases(ctx, user_id)
-    api_by_name = {c.get("name", "").strip(): c for c in api_cases}
+
+    def _case_status(c):
+        return c.get("analysis_status") or "new"
+
+    def _creator_label(c):
+        cid = c.get("creator_imperal_id")
+        if cid and cid == user_id:
+            return "you"
+        return c.get("creator_name") or c.get("creator_email") or "—"
 
     case_items = []
-    for folder in nc_folders:
-        api_case = api_by_name.get(folder, {})
-        status = api_case.get("analysis_status") or "new"
+    for c in api_cases:
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        status = _case_status(c)
         color = "green" if status == "completed" else "yellow" if status == "running" else "gray"
         case_items.append(ui.ListItem(
-            id=folder, title=folder, subtitle=f"Analysis: {status}",
-            selected=(folder == active_folder),
+            id=name, title=name,
+            subtitle=f"Analysis: {status} · Created by: {_creator_label(c)}",
+            selected=(name == active_folder),
             badge=ui.Badge(status, color=color),
-            on_click=ui.Call("__panel__sidebar", section=folder),
+            on_click=ui.Call("__panel__sidebar", section=name),
         ))
 
     cases_section = ui.Section(
-        title=f"Cases ({len(nc_folders)})",
+        title=f"Cases ({len(case_items)})",
         children=[
-            ui.List(items=case_items) if case_items else ui.Text("No folders in Nextcloud."),
+            ui.List(items=case_items) if case_items else ui.Text(
+                "No cases yet — create one, or ask an admin to share a case with you."),
             ui.Button(label="+ New Case", variant="ghost",
                       on_click=ui.Call("__panel__dashboard", view="create",
                                        tab="", section="", case_id="")),

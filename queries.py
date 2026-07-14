@@ -49,8 +49,11 @@ from queries_analysis import (  # noqa: F401 — re-export: analysis artifacts
     verify_audit,
 )
 from queries_collab import (  # noqa: F401 — re-export: shares/unlock/agency
+    admin_delete_user,
+    admin_update_user,
     create_invite,
     create_sharelock_user,
+    list_sharelock_users,
     delete_case,
     delete_file,
     delete_share,
@@ -75,9 +78,16 @@ async def get_cases(user_id: str, agency_id: Optional[str] = None) -> list:
     return resp if isinstance(resp, list) else resp.get("cases", [])
 
 
-async def get_case(case_id: int, agency_id: Optional[str] = None) -> dict:
-    """Get a single case by ID."""
-    return await _get(f"/cases/{case_id}", agency_id=agency_id)
+async def get_case(case_id: int, agency_id: Optional[str] = None,
+                   caller_imperal_id: Optional[str] = None) -> dict:
+    """Get a single case by ID.
+
+    Pass ``caller_imperal_id`` (the acting user) so the Cases API enforces
+    per-user visibility: a non-admin gets 404 (-> {} here) for a case they
+    neither own nor were shared. Omit it for system/analysis reads.
+    """
+    return await _get(f"/cases/{case_id}", agency_id=agency_id,
+                      caller_imperal_id=caller_imperal_id)
 
 
 async def create_case(user_id: str, name: str, description: str = "",

@@ -35,7 +35,7 @@ def _unlocked(monkeypatch):
 
 
 def _case_ok(monkeypatch):
-    async def get_case(case_id, agency_id=None):
+    async def get_case(case_id, agency_id=None, caller_imperal_id=None):
         return {"id": case_id, "name": "Case X"}
     monkeypatch.setattr(hs.queries, "get_case", get_case)
 
@@ -82,7 +82,7 @@ def test_share_case_non_imp_input_stored_verbatim_with_honest_note(monkeypatch):
 def test_share_case_unknown_case_is_error(monkeypatch):
     _unlocked(monkeypatch)
 
-    async def get_case(case_id, agency_id=None):
+    async def get_case(case_id, agency_id=None, caller_imperal_id=None):
         return {}  # Cases API 404 -> {}
     monkeypatch.setattr(hs.queries, "get_case", get_case)
 

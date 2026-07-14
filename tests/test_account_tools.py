@@ -253,3 +253,112 @@ def test_invite_ttl_out_of_range_falls_back_to_default(monkeypatch):
     asyncio.run(handlers_account.fn_invite_user(
         _Ctx(), InviteUserParams(ttl_days=90)))
     assert seen["ttl_days"] == 7
+
+
+# ── admin user management ──────────────────────────────────────────────────────
+
+
+def test_list_users_requires_admin(monkeypatch):
+    _unlocked_user(monkeypatch)
+    called = []
+    async def fake(agency_id): called.append(agency_id)
+    monkeypatch.setattr(handlers_account.queries, "list_sharelock_users", fake)
+    res = asyncio.run(handlers_account.fn_list_users(_Ctx(), EmptyParams()))
+    assert res.status == "success" and res.data["reason"] == "admin_role_required"
+    assert called == []
+
+
+def test_list_users_returns_agency_users(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    async def fake(agency_id):
+        return [{"id": 3, "email": "a@x.io", "name": "A", "role": "admin",
+                 "is_active": 1, "imperal_id": "imp_u_a", "case_count": 2},
+                {"id": 9, "email": "b@x.io", "name": "B", "role": "user",
+                 "is_active": 0, "imperal_id": "", "case_count": 0}]
+    monkeypatch.setattr(handlers_account.queries, "list_sharelock_users", fake)
+    res = asyncio.run(handlers_account.fn_list_users(_Ctx(), EmptyParams()))
+    assert res.status == "success" and res.data["count"] == 2
+    assert res.data["users"][0]["role"] == "admin"
+    assert res.data["users"][1]["is_active"] is False
+
+
+def test_update_user_requires_admin(monkeypatch):
+    _unlocked_user(monkeypatch)
+    from handlers_account import UserAdminParams
+    called = []
+    async def fake(**kw): called.append(kw)
+    monkeypatch.setattr(handlers_account.queries, "admin_update_user", fake)
+    res = asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9, role="admin")))
+    assert res.data["reason"] == "admin_role_required" and called == []
+
+
+def test_update_user_changes_role(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    from handlers_account import UserAdminParams
+    seen = {}
+    async def fake(user_id, agency_id, role=None, is_active=None):
+        seen.update(dict(user_id=user_id, role=role, is_active=is_active))
+        return {"id": user_id, "email": "b@x.io", "role": role or "user", "is_active": True}
+    monkeypatch.setattr(handlers_account.queries, "admin_update_user", fake)
+    res = asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9, role="admin")))
+    assert res.status == "success" and res.data["ok"] is True
+    assert seen["role"] == "admin" and seen["is_active"] is None
+
+
+def test_update_user_disable_maps_state(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    from handlers_account import UserAdminParams
+    seen = {}
+    async def fake(user_id, agency_id, role=None, is_active=None):
+        seen["is_active"] = is_active
+        return {"id": user_id, "email": "b@x.io", "role": "user", "is_active": False}
+    monkeypatch.setattr(handlers_account.queries, "admin_update_user", fake)
+    res = asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9, is_active="disabled")))
+    assert res.status == "success" and seen["is_active"] is False
+    assert res.data["is_active"] is False
+
+
+def test_update_user_rejects_bad_inputs(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    from handlers_account import UserAdminParams
+    assert asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9, role="root"))).status != "success"
+    assert asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9, is_active="maybe"))).status != "success"
+    # nothing to change
+    assert asyncio.run(handlers_account.fn_update_user(
+        _Ctx(), UserAdminParams(user_id=9))).status != "success"
+
+
+def test_delete_user_requires_admin(monkeypatch):
+    _unlocked_user(monkeypatch)
+    from handlers_account import UserDeleteParams
+    called = []
+    async def fake(user_id, agency_id): called.append(user_id)
+    monkeypatch.setattr(handlers_account.queries, "admin_delete_user", fake)
+    res = asyncio.run(handlers_account.fn_delete_user(_Ctx(), UserDeleteParams(user_id=9)))
+    assert res.data["reason"] == "admin_role_required" and called == []
+
+
+def test_delete_user_revokes(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    from handlers_account import UserDeleteParams
+    seen = {}
+    async def fake(user_id, agency_id):
+        seen["uid"] = user_id; return {"revoked": True, "user_id": user_id}
+    monkeypatch.setattr(handlers_account.queries, "admin_delete_user", fake)
+    res = asyncio.run(handlers_account.fn_delete_user(_Ctx(), UserDeleteParams(user_id=9)))
+    assert res.status == "success" and res.data["ok"] is True and seen["uid"] == 9
+
+
+def test_delete_user_last_admin_is_graceful(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    from handlers_account import UserDeleteParams
+    async def fake(user_id, agency_id):
+        raise handlers_account.queries.CasesAPIError(409, "cannot remove the last active admin of the agency")
+    monkeypatch.setattr(handlers_account.queries, "admin_delete_user", fake)
+    res = asyncio.run(handlers_account.fn_delete_user(_Ctx(), UserDeleteParams(user_id=3)))
+    assert res.status == "success" and res.data["reason"] == "last_admin"

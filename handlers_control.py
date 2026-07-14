@@ -20,7 +20,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from app import chat, _user_agency
+from app import chat, _user_agency, _user_id
 from auth_gate import require_unlock, is_admin
 from imperal_sdk.chat import ActionResult
 import queries
@@ -83,7 +83,7 @@ async def fn_get_report(ctx, params: GetReportParams) -> ActionResult:
     case_id = params.case_id
     agency = _user_agency(ctx)
     try:
-        case = await queries.get_case(case_id, agency_id=agency)
+        case = await queries.get_case(case_id, agency_id=agency, caller_imperal_id=_user_id(ctx))
         if not case or not case.get("name"):
             return ActionResult.error(f"Case {case_id} not found.", retryable=False)
         case_name = case.get("name")
@@ -160,7 +160,7 @@ async def fn_delete_case(ctx, params: DeleteCaseParams) -> ActionResult:
     case_id = params.case_id
     agency = _user_agency(ctx)
     try:
-        case = await queries.get_case(case_id, agency_id=agency)
+        case = await queries.get_case(case_id, agency_id=agency, caller_imperal_id=_user_id(ctx))
         if not case or not case.get("name"):
             return ActionResult.error(f"Case {case_id} not found.", retryable=False)
         case_name = case.get("name")
