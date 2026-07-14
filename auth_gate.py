@@ -45,6 +45,11 @@ class UnlockState(BaseModel):
     unlocked: bool = False
     agency_id: str = "default"
     role: str = "user"
+    # Identity of the Sharelock ACCOUNT this session is signed in AS (the
+    # unlock's cases_user_id) — so surfaces can show "signed in as <email>".
+    email: str = ""
+    name: str = ""
+    cases_user_id: int = 0
 
 
 class LockedState(sdl.Entity):
@@ -83,6 +88,9 @@ async def _fetch_unlock(ctx, force_fresh: bool = False) -> UnlockState:
             unlocked=bool(data.get("unlocked")),
             agency_id=str(data.get("agency_id") or "default"),
             role=str(data.get("role") or "user"),
+            email=str(data.get("email") or ""),
+            name=str(data.get("name") or ""),
+            cases_user_id=int(data.get("cases_user_id") or 0),
         )
 
     # ctx.cache is a PROPERTY that may raise when the Context was built

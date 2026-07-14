@@ -175,7 +175,11 @@ def test_skeleton_and_panels_gated():
     # skeleton + sidebar use the combined unlock_ok (fetch + agency check);
     # the dashboard panel needs role, so it fetches state and checks both.
     assert "unlock_ok" in _src("skeleton.py"), "skeleton must check unlock"
-    assert "unlock_ok" in _src("panels.py"), "sidebar panel must check unlock"
+    # Sidebar now fetches the FULL unlock state (for the signed-in-as identity)
+    # and checks unlocked + agency consistency — same gate as the dashboard.
+    src_side = _src("panels.py")
+    assert "_fetch_unlock" in src_side and "_agency_consistent" in src_side, \
+        "sidebar panel must check unlock (fetch + agency)"
     src_case = _src("panels_case.py")
     assert "_fetch_unlock" in src_case, "dashboard panel must check unlock"
     assert "_agency_consistent" in src_case, \

@@ -38,6 +38,17 @@ _TABS = [
 ]
 
 
+def _home_button():
+    """Return-to-home: clears any selected case / tab / sub-view and lands on
+    the app's home screen (the case list / 'select a case'). A consistent way
+    back from a case, Settings, or any sub-view."""
+    return ui.Button(
+        label="Home", variant="ghost", size="sm", icon="Home",
+        on_click=ui.Call("__panel__dashboard", tab="", view="",
+                         section="", case_id=""),
+    )
+
+
 @ext.panel("dashboard", slot="right", title="Case Details", icon="file-text",
            default_width=480, min_width=360, max_width=640)
 async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
@@ -60,6 +71,7 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
     # ── Create Case Form ──────────────────────────────────────────────────
     if view == "create":
         return ui.Stack(children=[
+            _home_button(),
             ui.Text("Create New Case"),
             ui.Text("A folder will be created in Nextcloud and a case registered."),
             ui.Form(
@@ -122,10 +134,10 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
         except Exception as exc:
             log.error(f"Panel tab 'settings' error: {exc}")
             content = ui.Alert(title="Error", message=str(exc)[:300], type="error")
-        back = ui.Button(label="← Back", variant="ghost", size="sm",
-                         on_click=ui.Call("__panel__dashboard", tab="analysis",
-                                          section="", view="", case_id=case_id))
-        return ui.Stack(children=[back, content])
+        return ui.Stack(children=[
+            ui.Stack(children=[_home_button()], direction="h"),
+            content,
+        ])
 
     # ── Team: mint an invite code and show it IN the panel (admin only) ──
     if tab == "team_invite":
@@ -160,7 +172,7 @@ async def panel_dashboard(ctx, tab: str = "analysis", view: str = "",
 
     # ── Tab Bar ───────────────────────────────────────────────────────────
     tabs = list(_TABS) + ([("settings", "Settings")] if is_admin else [])
-    tab_buttons = []
+    tab_buttons = [_home_button()]
     for tid, label in tabs:
         tab_buttons.append(ui.Button(
             label=label,

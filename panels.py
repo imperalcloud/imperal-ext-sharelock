@@ -12,7 +12,7 @@ import httpx
 
 from imperal_sdk import ui
 from app import ext, _user_id, _user_agency
-from auth_gate import locked_panel, unlock_ok
+from auth_gate import locked_panel, _fetch_unlock, _agency_consistent
 import files
 from files import parse_dav_xml  # DTD/entity-rejecting DAV XML parse (XXE hygiene)
 from cache_models import (
@@ -286,8 +286,9 @@ async def _list_nc_files_recursive(backend, folder: str) -> list[dict]:
 @ext.panel("sidebar", slot="left", title="Sharelock", icon="shield",
            default_width=300, min_width=240, max_width=400)
 async def panel_sidebar(ctx, section: str = "", **kwargs):
-    """Left panel: Nextcloud folders as cases + recursive file list."""
-    if not await unlock_ok(ctx):
+    """Left panel: the user's cases + recursive file list + account."""
+    unlock = await _fetch_unlock(ctx)
+    if not (unlock.unlocked and _agency_consistent(ctx, unlock)):
         return locked_panel()
     user_id = _user_id(ctx)
     active_folder = section or ""
@@ -359,12 +360,16 @@ async def panel_sidebar(ctx, section: str = "", **kwargs):
 
     files_section = ui.Section(title=f"Files ({file_count})", children=files_children)
 
-    # Sign out lives on the ALWAYS-VISIBLE surface every unlocked user has
-    # (settings is admin-only): ends the unlock early; the next render of any
-    # Sharelock surface shows the sign-in placeholder.
-    account_section = ui.Section(title="Account", children=[
+    # Account: WHO you are inside Sharelock (the signed-in-as identity — its
+    # own account, separate from Imperal), plus sign-out. Sits on the
+    # always-visible sidebar every unlocked user has (settings is admin-only).
+    who = unlock.email or unlock.name or "your Sharelock account"
+    account_children = [
+        ui.Text(f"Signed in as {who}"),
+        ui.Badge(unlock.role, color=("blue" if unlock.role == "admin" else "gray")),
         ui.Button(label="Sign out of Sharelock", variant="ghost", icon="LogOut",
                   on_click=ui.Call("sharelock_sign_out")),
-    ])
+    ]
+    account_section = ui.Section(title="Account", children=account_children)
 
     return ui.Stack(children=[cases_section, files_section, account_section])
