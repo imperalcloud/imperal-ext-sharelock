@@ -40,11 +40,9 @@ async def build_share_tab(ctx, case_id: int):
     ])
 
     # ── Who currently has access (+ Revoke) ──────────────────────────────
-    shared_ids = set()
     rows = []
     for s in shares:
         suid = s.get("shared_with_user_id")
-        shared_ids.add(suid)
         label = (s.get("email") or s.get("name")
                  or s.get("imperal_id") or f"user #{suid}")
         rows.append(ui.Row(children=[
@@ -60,49 +58,22 @@ async def build_share_tab(ctx, case_id: int):
     )
 
     # ── Share with a colleague ────────────────────────────────────────────
-    # Prefer a picker of agency colleagues (nicer + no typos); fall back to a
-    # plain email field if the roster is unavailable.
-    colleagues = []
-    try:
-        users = await queries.list_sharelock_users(agency)
-        owner_email = (owner.get("email") or "").lower()
-        for u in (users or []):
-            if not isinstance(u, dict) or not u.get("is_active"):
-                continue
-            email = u.get("email") or ""
-            if not email or email.lower() == owner_email:
-                continue
-            if u.get("id") in shared_ids:
-                continue
-            name = u.get("name")
-            colleagues.append({
-                "value": email,
-                "label": f"{name} ({email})" if name and name != email else email,
-            })
-    except Exception as exc:
-        log.debug(f"share tab: colleague roster unavailable: {exc}")
-        colleagues = []
-
-    if colleagues:
-        picker = ui.Select(param_name="colleague",
-                           placeholder="Choose a colleague…", options=colleagues)
-        helper = ("They get read access to this case. Only active Sharelock "
-                  "users in your agency appear here.")
-    else:
-        picker = ui.Input(param_name="colleague",
-                          placeholder="Colleague's Sharelock email")
-        helper = ("Enter the email your colleague signs in to Sharelock with. "
-                  "They must already have a Sharelock account in your agency "
-                  "(register or assign them first).")
-
+    # Type the colleague's email — deliberately NOT a roster dropdown: a case
+    # owner must NOT be able to enumerate who exists in the agency (federal
+    # product). The Cases API resolves the email to that colleague's Sharelock
+    # account in this case's agency; an unknown email is a clean error.
     form_section = ui.Section(title="Share with a colleague", children=[
         ui.Form(
             action="share_case",
             submit_label="Share",
             defaults={"case_id": case_id},
-            children=[picker],
+            children=[
+                ui.Input(param_name="colleague",
+                         placeholder="Colleague's Sharelock email"),
+            ],
         ),
-        ui.Text(helper),
+        ui.Text("Enter the email your colleague signs in to Sharelock with. "
+                "They must already have a Sharelock account in your agency."),
     ])
 
     return ui.Stack(children=[owner_section, shares_section, form_section])
