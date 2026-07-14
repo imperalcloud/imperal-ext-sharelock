@@ -149,14 +149,28 @@ async def build_settings_tab(ctx):
             ]),
         ],
     )
+    invite_form = ui.Form(
+        action="sharelock_invite_user",
+        submit_label="Generate invite code",
+        children=[
+            ui.Input(param_name="email",
+                     placeholder="Email hint (optional) — locks the code to this email"),
+        ],
+    )
     team_section = ui.Section(title="Team", children=[
-        ui.Text("Register a Sharelock account for a colleague in your "
-                "agency. Sharelock has its own sign-in on top of Imperal: "
-                "the new user signs in with this email and password on the "
-                "Sharelock sign-in screen. If you leave the password empty, "
-                "a strong one is generated and shown to you ONCE — hand it "
-                "over securely and have them treat it as temporary."),
+        ui.Text("Two ways to onboard a colleague into your agency's "
+                "Sharelock (it has its own sign-in on top of Imperal):"),
+        ui.Text("1. Create the account yourself — set (or auto-generate) "
+                "their initial password and hand it over. If you leave the "
+                "password empty, a strong one is generated and shown to you "
+                "ONCE — have them treat it as temporary."),
         team_form,
+        ui.Divider(),
+        ui.Text("2. Or send an invite code — the colleague opens the "
+                "Sharelock Register page, enters the code, and picks their "
+                "own password. Codes are single-use, valid 7 days, shown to "
+                "you ONCE."),
+        invite_form,
     ])
 
     return ui.Stack(children=[

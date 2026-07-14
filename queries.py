@@ -49,6 +49,7 @@ from queries_analysis import (  # noqa: F401 — re-export: analysis artifacts
     verify_audit,
 )
 from queries_collab import (  # noqa: F401 — re-export: shares/unlock/agency
+    create_invite,
     create_sharelock_user,
     delete_case,
     delete_file,

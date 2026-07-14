@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.9.1",
+  "version": "3.9.2",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -6178,6 +6178,81 @@
           }
         },
         "title": "SignOutResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "tool_sharelock_chat"
+    },
+    {
+      "name": "sharelock_invite_user",
+      "description": "Mint a single-use Sharelock registration invite code (admin only). Hand the code to the new colleague — they register themselves on the Sharelock Register page with it, choosing their own password.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "create:sharelock_invite"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "email": {
+            "default": "",
+            "description": "Optional email hint — when set, ONLY this email can register with the code. Leave empty for a code anyone can use once.",
+            "title": "Email",
+            "type": "string"
+          },
+          "ttl_days": {
+            "default": 7,
+            "description": "How many days the code stays valid (1-30, default 7).",
+            "title": "Ttl Days",
+            "type": "integer"
+          }
+        },
+        "title": "InviteUserParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of minting a registration invite code.",
+        "properties": {
+          "created": {
+            "default": false,
+            "title": "Created",
+            "type": "boolean"
+          },
+          "invite_code": {
+            "default": "",
+            "title": "Invite Code",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "agency_id": {
+            "default": "",
+            "title": "Agency Id",
+            "type": "string"
+          },
+          "expires_at": {
+            "default": "",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "register_route": {
+            "default": "",
+            "title": "Register Route",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "InviteUserResult",
         "type": "object"
       },
       "event": "",

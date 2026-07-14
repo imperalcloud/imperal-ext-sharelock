@@ -49,6 +49,27 @@ class RegisterUserResult(BaseModel):
     reason: str = ""
 
 
+class InviteUserResult(BaseModel):
+    """Outcome of minting a registration invite code."""
+    created: bool = False
+    invite_code: str = ""
+    email: str = ""
+    agency_id: str = ""
+    expires_at: str = ""
+    register_route: str = ""
+    reason: str = ""
+
+
+class InviteUserParams(BaseModel):
+    email: str = Field("", description=(
+        "Optional email hint — when set, ONLY this email can register with "
+        "the code. Leave empty for a code anyone can use once."
+    ))
+    ttl_days: int = Field(7, description=(
+        "How many days the code stays valid (1-30, default 7)."
+    ))
+
+
 class RegisterUserParams(BaseModel):
     email: str = Field(..., description=(
         "New user's email — their Sharelock sign-in login. Pass VERBATIM."
@@ -113,6 +134,66 @@ async def fn_sign_out(ctx, params: EmptyParams) -> ActionResult:
         summary=("Signed out of Sharelock — all Sharelock surfaces are "
                  "locked until the next sign-in." if was_unlocked else
                  "You were not signed in to Sharelock — nothing to sign out of."),
+    )
+
+
+# ── Admin invite ──────────────────────────────────────────────────────────────
+
+
+@chat.function("sharelock_invite_user", action_type="write",
+               effects=["create:sharelock_invite"],
+               data_model=InviteUserResult,
+               description=(
+                   "Mint a single-use Sharelock registration invite code "
+                   "(admin only). Hand the code to the new colleague — they "
+                   "register themselves on the Sharelock Register page with "
+                   "it, choosing their own password."
+               ))
+@auth_gate.require_unlock
+async def fn_invite_user(ctx, params: InviteUserParams) -> ActionResult:
+    """Admin-gated invite minting — the self-service counterpart of
+    sharelock_register_user (there the admin sets everything; here the new
+    user picks their own password on the Register page)."""
+    state = await auth_gate._fetch_unlock(ctx, force_fresh=True)
+    if state.role != "admin":
+        return ActionResult.success(
+            data=InviteUserResult(reason="admin_role_required").model_dump(),
+            summary=("Minting Sharelock invites requires the Sharelock "
+                     "admin role — ask your agency supervisor."),
+        )
+
+    ttl_days = params.ttl_days if 1 <= params.ttl_days <= 30 else 7
+    imperal_id = str(getattr(ctx.user, "imperal_id", "") or "")
+    try:
+        resp = await queries.create_invite(
+            agency_id=state.agency_id, created_by_imperal_id=imperal_id,
+            email=(params.email or "").strip().lower(), ttl_days=ttl_days,
+        )
+    except Exception as e:
+        log.warning(f"invite_user: mint failed: {e}")
+        return ActionResult.error(
+            "Invite creation did not complete — the Cases service did not "
+            "confirm it. Try again.", retryable=True)
+
+    code = str(resp.get("invite_code") or "")
+    if not code:
+        return ActionResult.error(
+            "Invite creation did not complete — no code returned.",
+            retryable=True)
+    result = InviteUserResult(
+        created=True, invite_code=code,
+        email=str(resp.get("email") or ""),
+        agency_id=str(resp.get("agency_id") or state.agency_id),
+        expires_at=str(resp.get("expires_at") or ""),
+        register_route=auth_gate.REGISTER_ROUTE,
+    )
+    who = f" for {result.email}" if result.email else ""
+    return ActionResult.success(
+        data=result.model_dump(),
+        summary=(f"Invite code{who} (single-use, shown ONCE, valid until "
+                 f"{result.expires_at} UTC): {code} — the new user enters it "
+                 f"on the Sharelock Register page ({result.register_route}) "
+                 "and picks their own password."),
     )
 
 

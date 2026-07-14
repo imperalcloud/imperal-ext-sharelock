@@ -123,6 +123,22 @@ async def delete_unlock(imperal_id: str) -> dict:
     return resp if isinstance(resp, dict) else {"signed_out": False}
 
 
+async def create_invite(agency_id: str, created_by_imperal_id: str,
+                        email: str = "", ttl_days: int = 7) -> dict:
+    """Mint a single-use invite code (POST /auth/invites).
+
+    The caller (handlers_account.fn_invite_user) enforces the LIVE admin
+    check; the invite carries the ISSUING admin's agency and identity
+    (invites.created_by is NOT NULL — no anonymous onboarding). Returns
+    ``{"invite_code": <raw, shown ONCE>, "agency_id", "email", "expires_at"}``
+    — the code is exactly what the Register page consumes.
+    """
+    return await _post("/auth/invites", {
+        "agency_id": agency_id, "created_by_imperal_id": created_by_imperal_id,
+        "email": email, "ttl_days": ttl_days,
+    })
+
+
 async def create_sharelock_user(email: str, password: str, role: str,
                                 agency_id: str, name: str = "",
                                 imperal_id: str = "") -> dict:

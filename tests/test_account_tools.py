@@ -18,7 +18,7 @@ import auth_gate
 from auth_gate import UnlockState
 import handlers_account
 from handlers import EmptyParams
-from handlers_account import RegisterUserParams
+from handlers_account import InviteUserParams, RegisterUserParams
 
 
 # Not a secret: runtime-built test-only password (deploy security scan
@@ -188,3 +188,68 @@ def test_register_rejects_bad_role_and_short_password(monkeypatch):
     res2 = asyncio.run(handlers_account.fn_register_user(
         _Ctx(), RegisterUserParams(email="x@y.io", password="short")))
     assert res2.status != "success"
+
+
+# ── invite user ───────────────────────────────────────────────────────────────
+
+
+def test_invite_requires_live_admin_role(monkeypatch):
+    _unlocked_user(monkeypatch)
+    called = []
+
+    async def fake_invite(**kw):
+        called.append(kw)
+
+    monkeypatch.setattr(handlers_account.queries, "create_invite", fake_invite)
+    res = asyncio.run(handlers_account.fn_invite_user(_Ctx(), InviteUserParams()))
+    assert res.status == "success"
+    assert res.data["created"] is False
+    assert res.data["reason"] == "admin_role_required"
+    assert called == []
+
+
+def test_invite_threads_agency_issuer_and_shows_code_once(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    seen = {}
+
+    async def fake_invite(**kw):
+        seen.update(kw)
+        return {"invite_code": "RAWCODE123456", "agency_id": kw["agency_id"],
+                "email": kw["email"], "expires_at": "2026-07-21 00:00:00"}
+
+    monkeypatch.setattr(handlers_account.queries, "create_invite", fake_invite)
+    res = asyncio.run(handlers_account.fn_invite_user(
+        _Ctx(), InviteUserParams(email="New@Agency.GOV", ttl_days=7)))
+    assert res.status == "success" and res.data["created"] is True
+    assert seen["agency_id"] == "default", "invite carries the ISSUER's agency"
+    assert seen["created_by_imperal_id"] == "imp_u_test", "issuer is accountable"
+    assert seen["email"] == "new@agency.gov"
+    assert res.data["invite_code"] == "RAWCODE123456"
+    assert "RAWCODE123456" in res.summary, "code shown ONCE to the admin"
+    assert res.data["register_route"], "points the admin at the Register page"
+
+
+def test_invite_mint_failure_is_honest_error(monkeypatch):
+    _unlocked_admin(monkeypatch)
+
+    async def fake_invite(**kw):
+        raise RuntimeError("cases api down")
+
+    monkeypatch.setattr(handlers_account.queries, "create_invite", fake_invite)
+    res = asyncio.run(handlers_account.fn_invite_user(_Ctx(), InviteUserParams()))
+    assert res.status != "success"
+
+
+def test_invite_ttl_out_of_range_falls_back_to_default(monkeypatch):
+    _unlocked_admin(monkeypatch)
+    seen = {}
+
+    async def fake_invite(**kw):
+        seen.update(kw)
+        return {"invite_code": "C" * 20, "agency_id": kw["agency_id"],
+                "email": "", "expires_at": "x"}
+
+    monkeypatch.setattr(handlers_account.queries, "create_invite", fake_invite)
+    asyncio.run(handlers_account.fn_invite_user(
+        _Ctx(), InviteUserParams(ttl_days=90)))
+    assert seen["ttl_days"] == 7
