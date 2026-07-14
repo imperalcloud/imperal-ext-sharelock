@@ -1,11 +1,14 @@
 """
-Sharelock v2 — Share tab builder (right panel, Track C.2 T3).
+Sharelock v2 — Share tab builder (right panel).
 
-Renders the case owner + share grants, a share form, and per-grant revoke
-buttons. ``case_id`` rides the share form via DForm ``defaults`` — the
-deployed renderer seeds its submit-values state from ``props.defaults``
-(verified against /opt/imperal-panel DForm.tsx, 2026-06-12), so the POSTed
-``params`` carry ``case_id`` alongside the typed ``colleague`` field.
+Share model (2026-07-14): a case is shared with a SHARELOCK USER (account in
+your agency), resolved from the colleague's Sharelock email. The tab shows
+the owner, who currently has access (+ Revoke), and a colleague picker.
+
+``case_id`` rides the share form via DForm ``defaults`` — the deployed
+renderer seeds its submit-values state from ``props.defaults`` (verified
+against /opt/imperal-panel DForm.tsx), so the POSTed ``params`` carry
+``case_id`` alongside the chosen ``colleague``.
 """
 import logging
 
@@ -24,56 +27,82 @@ async def build_share_tab(ctx, case_id: int):
         data = await queries.get_shares(case_id, agency_id=agency)
     except Exception as exc:
         log.warning(f"share tab: get_shares failed for case {case_id}: {exc}")
-        return ui.Alert(title="Shares Unavailable",
-                        message="Could not load share grants. Try again shortly.",
+        return ui.Alert(title="Sharing unavailable",
+                        message="Could not load sharing for this case. Try again shortly.",
                         type="warning")
 
     owner = data.get("owner") or {}
     shares = [s for s in (data.get("shares") or []) if isinstance(s, dict)]
 
-    owner_label = (owner.get("email") or owner.get("name")
-                   or owner.get("imperal_id") or "unknown")
+    owner_label = owner.get("email") or owner.get("name") or "unknown"
     owner_section = ui.Section(title="Owner", children=[
-        ui.KeyValue(items=[
-            {"key": "Owner", "value": owner_label},
-            {"key": "Imperal ID", "value": owner.get("imperal_id") or "—"},
-        ]),
+        ui.Text(f"{owner_label} created this case and always has access."),
     ])
 
+    # ── Who currently has access (+ Revoke) ──────────────────────────────
+    shared_ids = set()
     rows = []
     for s in shares:
-        sid = s.get("imperal_id") or ""
-        label = s.get("email") or s.get("name") or sid or "?"
-        sub = sid if label != sid else (
-            f"granted by {s.get('granted_by')}" if s.get("granted_by") else "")
-        left_children = [ui.Text(label)]
-        if sub:
-            left_children.append(ui.Text(sub))
+        suid = s.get("shared_with_user_id")
+        shared_ids.add(suid)
+        label = (s.get("email") or s.get("name")
+                 or s.get("imperal_id") or f"user #{suid}")
         rows.append(ui.Row(children=[
-            ui.Stack(children=left_children, gap=0),
+            ui.Text(label),
             ui.Button("Revoke", variant="ghost", size="sm", icon="UserMinus",
-                      on_click=ui.Call("unshare_case",
-                                       case_id=case_id, colleague=sid)),
+                      on_click=ui.Call("unshare_case", case_id=case_id,
+                                       colleague=str(suid))),
         ]))
     shares_section = ui.Section(
         title=f"Shared with ({len(shares)})",
-        children=rows if rows else [ui.Text("Not shared with anyone yet.")],
+        children=rows if rows else [
+            ui.Text("Not shared with anyone yet — this case is private to its owner.")],
     )
+
+    # ── Share with a colleague ────────────────────────────────────────────
+    # Prefer a picker of agency colleagues (nicer + no typos); fall back to a
+    # plain email field if the roster is unavailable.
+    colleagues = []
+    try:
+        users = await queries.list_sharelock_users(agency)
+        owner_email = (owner.get("email") or "").lower()
+        for u in (users or []):
+            if not isinstance(u, dict) or not u.get("is_active"):
+                continue
+            email = u.get("email") or ""
+            if not email or email.lower() == owner_email:
+                continue
+            if u.get("id") in shared_ids:
+                continue
+            name = u.get("name")
+            colleagues.append({
+                "value": email,
+                "label": f"{name} ({email})" if name and name != email else email,
+            })
+    except Exception as exc:
+        log.debug(f"share tab: colleague roster unavailable: {exc}")
+        colleagues = []
+
+    if colleagues:
+        picker = ui.Select(param_name="colleague",
+                           placeholder="Choose a colleague…", options=colleagues)
+        helper = ("They get read access to this case. Only active Sharelock "
+                  "users in your agency appear here.")
+    else:
+        picker = ui.Input(param_name="colleague",
+                          placeholder="Colleague's Sharelock email")
+        helper = ("Enter the email your colleague signs in to Sharelock with. "
+                  "They must already have a Sharelock account in your agency "
+                  "(register or assign them first).")
 
     form_section = ui.Section(title="Share with a colleague", children=[
         ui.Form(
             action="share_case",
             submit_label="Share",
-            # case_id rides the submit via DForm defaults (seeds the
-            # values dict the form POSTs as params).
             defaults={"case_id": case_id},
-            children=[
-                ui.Input(param_name="colleague",
-                         placeholder="imp_u_... of your colleague"),
-            ],
+            children=[picker],
         ),
-        ui.Text("Email lookup lands later — use the colleague's imperal id "
-                "(shown above for existing grants)."),
+        ui.Text(helper),
     ])
 
     return ui.Stack(children=[owner_section, shares_section, form_section])

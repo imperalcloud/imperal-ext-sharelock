@@ -61,22 +61,24 @@ def test_share_case_passes_colleague_verbatim(monkeypatch):
     assert res.data["note"] is None  # imp_-prefixed: no honesty note needed
 
 
-def test_share_case_non_imp_input_stored_verbatim_with_honest_note(monkeypatch):
+def test_share_case_by_email_resolves_server_side(monkeypatch):
+    # Email is first-class now: the ext passes the colleague identifier
+    # (email or imp id) to the Cases API, which resolves it to a Sharelock
+    # user in the case's agency. No 'stored verbatim' honesty caveat anymore.
     _unlocked(monkeypatch)
     _case_ok(monkeypatch)
     seen = {}
 
     async def post_share(case_id, imperal_id, granted_by, agency_id=None):
         seen["imperal_id"] = imperal_id
-        return {"ok": True}
+        return {"ok": True, "shared_with_user_id": 42}
     monkeypatch.setattr(hs.queries, "post_share", post_share)
 
     res = asyncio.run(hs.fn_share_case(
         _Ctx(), ShareCaseParams(case_id=5, colleague="bob@example.com")))
     assert res.status == "success"
-    assert seen["imperal_id"] == "bob@example.com", "input must ride AS-IS"
-    assert res.data["note"], "non-imp_ identifier must carry the honesty note"
-    assert "verbatim" in res.data["note"]
+    assert seen["imperal_id"] == "bob@example.com", "colleague rides to the API which resolves it"
+    assert res.data["note"] is None, "email is first-class — no verbatim caveat"
 
 
 def test_share_case_unknown_case_is_error(monkeypatch):

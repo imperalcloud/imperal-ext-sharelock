@@ -15,4 +15,4 @@ def test_no_get_llm_provider_anywhere():
 
 
 def test_version_bumped():
-    assert 'version="3.9.4"' in _src("app.py")
+    assert 'version="3.9.5"' in _src("app.py")

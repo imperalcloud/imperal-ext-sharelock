@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.9.4",
+  "version": "3.9.5",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -1860,7 +1860,7 @@
     },
     {
       "name": "share_case",
-      "description": "Share an investigation case with a colleague in the same agency by their imperal id (imp_u_...). Pass `colleague` VERBATIM as the user supplied it.",
+      "description": "Share an investigation case with a colleague in the same agency by their Sharelock email (or imperal id). The colleague must already have a Sharelock account in your agency. Pass `colleague` VERBATIM.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -1875,7 +1875,7 @@
             "type": "integer"
           },
           "colleague": {
-            "description": "Colleague identifier — their imperal id (imp_u_...). Pass VERBATIM as the user supplied it. Do NOT paraphrase or normalise; the grant is stored keyed by this exact string.",
+            "description": "The colleague's Sharelock EMAIL (the email they sign in to Sharelock with) — or their imperal id. Pass VERBATIM. The case is shared with that Sharelock account in your agency; they must already have one.",
             "title": "Colleague",
             "type": "string"
           }
@@ -2031,7 +2031,7 @@
             "type": "integer"
           },
           "colleague": {
-            "description": "Colleague identifier the grant was created with (imp_u_...). Pass VERBATIM — revocation matches the stored grant key exactly.",
+            "description": "Who to revoke — the colleague's Sharelock email, imperal id, or the share's user id. Pass VERBATIM.",
             "title": "Colleague",
             "type": "string"
           }

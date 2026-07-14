@@ -27,17 +27,17 @@ log = logging.getLogger("sharelock-v2.handlers_share")
 class ShareCaseParams(BaseModel):
     case_id: int = Field(..., description="Case ID to share")
     colleague: str = Field(..., description=(
-        "Colleague identifier — their imperal id (imp_u_...). Pass VERBATIM "
-        "as the user supplied it. Do NOT paraphrase or normalise; the grant "
-        "is stored keyed by this exact string."
+        "The colleague's Sharelock EMAIL (the email they sign in to Sharelock "
+        "with) — or their imperal id. Pass VERBATIM. The case is shared with "
+        "that Sharelock account in your agency; they must already have one."
     ))
 
 
 class UnshareCaseParams(BaseModel):
     case_id: int = Field(..., description="Case ID to revoke access on")
     colleague: str = Field(..., description=(
-        "Colleague identifier the grant was created with (imp_u_...). Pass "
-        "VERBATIM — revocation matches the stored grant key exactly."
+        "Who to revoke — the colleague's Sharelock email, imperal id, or the "
+        "share's user id. Pass VERBATIM."
     ))
 
 
@@ -53,24 +53,23 @@ class CaseSharesParams(BaseModel):
                data_model=ShareCaseResponse,
                description=(
                    "Share an investigation case with a colleague in the same "
-                   "agency by their imperal id (imp_u_...). Pass `colleague` "
-                   "VERBATIM as the user supplied it."
+                   "agency by their Sharelock email (or imperal id). The "
+                   "colleague must already have a Sharelock account in your "
+                   "agency. Pass `colleague` VERBATIM."
                ))
 @require_unlock
 async def fn_share_case(ctx, params: ShareCaseParams) -> ActionResult:
-    """Grant a colleague access to a case.
+    """Grant a colleague read access to a case.
 
-    v1 passes ``colleague`` to the Cases API AS-IS as the grant's
-    ``imperal_id`` (the share body's only key). TODO(controller): the Cases
-    API will resolve emails server-side later; until then the e2e flow uses
-    the colleague's imperal id as shown by list_case_shares. When the input
-    doesn't look like an imperal id we still store it verbatim and say so
-    honestly in the fact (``note``).
-    """
+    The Cases API resolves ``colleague`` (email or imperal id) to a Sharelock
+    USER in the case's agency and keys the grant by that user id. An
+    unresolvable colleague (no such account in the agency) comes back as a
+    422 -> a clean, honest error."""
     colleague = params.colleague.strip()
     if not colleague:
-        return ActionResult.error("A colleague identifier is required.",
-                                  retryable=False)
+        return ActionResult.error(
+            "A colleague's Sharelock email (or imperal id) is required.",
+            retryable=False)
     agency = _user_agency(ctx)
     try:
         case = await queries.get_case(params.case_id, agency_id=agency, caller_imperal_id=_user_id(ctx))
@@ -80,20 +79,18 @@ async def fn_share_case(ctx, params: ShareCaseParams) -> ActionResult:
         case_name = case.get("name")
         await queries.post_share(params.case_id, colleague,
                                  granted_by=_user_id(ctx), agency_id=agency)
-        note = None
-        if not colleague.startswith("imp_"):
-            note = ("identifier does not look like an imperal id (imp_u_...) "
-                    "— stored verbatim; email lookup lands server-side later")
         return ActionResult.success(
             data={"shared": True, "case_id": params.case_id,
-                  "imperal_id": colleague, "note": note},
+                  "imperal_id": colleague, "note": None},
             summary=(f"Case **{case_name}** (ID: {params.case_id}) shared "
-                     f"with {colleague}."
-                     + (f" Note: {note}." if note else "")),
+                     f"with {colleague} — they now have read access."),
         )
     except CasesAPIError as e:
-        return ActionResult.error(f"Share failed: {e.detail or e}",
-                                  retryable=False)
+        # 422 = no Sharelock account for that colleague in this agency.
+        detail = getattr(e, "detail", None) or str(e)
+        return ActionResult.error(
+            detail if getattr(e, "status", None) == 422
+            else f"Share failed: {detail}", retryable=False)
     except Exception as e:
         return ActionResult.error(f"Share failed: {e}")
 
