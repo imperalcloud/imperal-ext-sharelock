@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.2.2",
   "app_id": "sharelock-v2",
-  "version": "3.9.0",
+  "version": "3.9.1",
   "name": "Sharelock",
   "description": "Forensic case analysis — manage cases, upload documents, run AI-driven incremental analysis pipelines, generate prosecution and inspection reports, and review forensic findings.",
   "icon": "icon.svg",
@@ -6157,7 +6157,12 @@
         "update:sharelock_unlock"
       ],
       "id_projection": "",
-      "params_schema": {},
+      "params_schema": {
+        "description": "Federal V17 placeholder for handlers that take no parameters.\n\n`@chat.function` MUST declare a Pydantic params model — this is the\ncanonical empty model reused by read-only handlers (list_*, sync_*,\n*_health) that don't need any input.",
+        "properties": {},
+        "title": "EmptyParams",
+        "type": "object"
+      },
       "return_schema": {
         "description": "Outcome of a Sharelock sign-out.",
         "properties": {

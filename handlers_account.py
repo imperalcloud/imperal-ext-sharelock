@@ -23,6 +23,7 @@ from imperal_sdk.chat import ActionResult
 from app import chat
 import auth_gate
 import queries
+from handlers import EmptyParams
 
 log = logging.getLogger("sharelock-v2.handlers_account")
 
@@ -76,7 +77,7 @@ class RegisterUserParams(BaseModel):
                    "for this user). The Imperal session itself stays signed "
                    "in — only Sharelock locks until the next sign-in."
                ))
-async def fn_sign_out(ctx) -> ActionResult:
+async def fn_sign_out(ctx, params: EmptyParams) -> ActionResult:
     """End the caller's unlock. Deliberately NOT @require_unlock-gated:
     sign-out must work (as a no-op) even when already locked, and gating it
     would answer a sign-out request with a sign-IN prompt — nonsense UX."""
