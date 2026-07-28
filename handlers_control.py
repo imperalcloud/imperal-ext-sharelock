@@ -138,6 +138,7 @@ async def fn_get_report(ctx, params: GetReportParams) -> ActionResult:
 
 
 @chat.function("delete_case", action_type="destructive",
+               event="sharelock-v2.delete_case",
                effects=["delete:case"],
                data_model=CaseDeleteReceipt,
                description=(
@@ -183,6 +184,7 @@ async def fn_delete_case(ctx, params: DeleteCaseParams) -> ActionResult:
 
 
 @chat.function("delete_file", action_type="destructive",
+               event="sharelock-v2.delete_file",
                effects=["delete:file"],
                data_model=FileDeleteReceipt,
                description=(
@@ -202,6 +204,7 @@ async def fn_delete_file(ctx, params: DeleteFileParams) -> ActionResult:
         return ActionResult.success(
             data={"deleted": deleted, "case_id": case_id, "file_id": file_id},
             summary=(f"Evidence file {file_id} deleted from case {case_id}."),
+            refresh_panels=["dashboard"],
         )
     except CasesAPIError as e:
         return ActionResult.error(f"Delete failed: {e.detail or e}", retryable=False)
@@ -213,6 +216,7 @@ async def fn_delete_file(ctx, params: DeleteFileParams) -> ActionResult:
 
 
 @chat.function("update_case", action_type="write",
+               event="sharelock-v2.update_case",
                effects=["update:case"],
                data_model=UpdateCaseReceipt,
                description=(
@@ -239,6 +243,7 @@ async def fn_update_case(ctx, params: UpdateCaseParams) -> ActionResult:
                   "description": description},
             summary=(f"Case {case_id} updated"
                      + (f" — name is now **{new_name}**." if name else ".")),
+            refresh_panels=["sidebar", "dashboard"],
         )
     except CasesAPIError as e:
         return ActionResult.error(f"Update failed: {e.detail or e}", retryable=False)

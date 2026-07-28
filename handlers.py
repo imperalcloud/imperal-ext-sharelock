@@ -275,6 +275,7 @@ async def case_chat(ctx, params: CaseChatParams) -> ActionResult:
 
 
 @chat.function("create_case", action_type="write",
+               event="sharelock-v2.create_case",
                effects=["create:case", "create:folder"],
                data_model=CreateCaseResponse,
                description=(
@@ -335,6 +336,7 @@ async def fn_create_case(ctx, params: CreateCaseParams) -> ActionResult:
 
 
 @chat.function("sync_cases", action_type="write",
+               event="sharelock-v2.sync_cases",
                effects=["create:case"],
                data_model=SyncCasesResponse,
                description="Sync cases from Nextcloud folders — create cases for new folders")

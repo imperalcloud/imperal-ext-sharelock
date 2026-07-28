@@ -13,6 +13,7 @@ import logging
 from typing import Optional
 
 import httpx
+from imperal_sdk._shared_http import shared_http
 
 from app import CASES_API_URL, CASES_API_KEY
 
@@ -70,7 +71,7 @@ async def _get(path: str, agency_id: Optional[str] = None,
     ``path`` (query-param injection / smuggling). ``path`` should carry
     only typed path segments + server-fixed query keys.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+    async with shared_http(timeout=_TIMEOUT) as c:
         r = await c.get(f"{CASES_API_URL}{path}",
                         headers=_hdrs(agency_id, caller_imperal_id),
                         params=params or None)
@@ -91,7 +92,7 @@ async def _post(path: str, data: dict | None = None, params: dict | None = None,
     headers = _hdrs(agency_id)
     if extra_headers:
         headers.update(extra_headers)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+    async with shared_http(timeout=_TIMEOUT) as c:
         r = await c.post(
             f"{CASES_API_URL}{path}",
             headers=headers,
@@ -105,7 +106,7 @@ async def _post(path: str, data: dict | None = None, params: dict | None = None,
 async def _put(path: str, data: dict | None = None,
                agency_id: Optional[str] = None):
     """PUT helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+    async with shared_http(timeout=_TIMEOUT) as c:
         r = await c.put(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
                         json=data or {})
         _raise_for_error(r)
@@ -115,7 +116,7 @@ async def _put(path: str, data: dict | None = None,
 async def _patch(path: str, data: dict | None = None,
                  agency_id: Optional[str] = None):
     """PATCH helper. Raises CasesAPIError on 4xx/5xx (mirrors _put)."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+    async with shared_http(timeout=_TIMEOUT) as c:
         r = await c.patch(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id),
                           json=data or {})
         _raise_for_error(r)
@@ -124,7 +125,7 @@ async def _patch(path: str, data: dict | None = None,
 
 async def _delete(path: str, agency_id: Optional[str] = None):
     """DELETE helper. Raises CasesAPIError on 4xx/5xx (mirrors _post)."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+    async with shared_http(timeout=_TIMEOUT) as c:
         r = await c.delete(f"{CASES_API_URL}{path}", headers=_hdrs(agency_id))
         _raise_for_error(r)
         return r.json()

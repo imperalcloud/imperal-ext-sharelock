@@ -129,6 +129,7 @@ class RegisterUserParams(BaseModel):
 
 
 @chat.function("sharelock_sign_out", action_type="write",
+               event="sharelock-v2.sharelock_sign_out",
                effects=["update:sharelock_unlock"],
                data_model=SignOutResult,
                description=(
@@ -179,6 +180,7 @@ async def fn_sign_out(ctx, params: EmptyParams) -> ActionResult:
 
 
 @chat.function("sharelock_invite_user", action_type="write",
+               event="sharelock-v2.sharelock_invite_user",
                effects=["create:sharelock_invite"],
                data_model=InviteUserResult,
                description=(
@@ -239,6 +241,7 @@ async def fn_invite_user(ctx, params: InviteUserParams) -> ActionResult:
 
 
 @chat.function("sharelock_register_user", action_type="write",
+               event="sharelock-v2.sharelock_register_user",
                effects=["create:sharelock_user"],
                data_model=RegisterUserResult,
                description=(
@@ -359,6 +362,7 @@ async def fn_list_users(ctx, params: EmptyParams) -> ActionResult:
 
 
 @chat.function("sharelock_update_user", action_type="write",
+               event="sharelock-v2.sharelock_update_user",
                effects=["update:sharelock_user"],
                data_model=UserAdminResult,
                description=(
@@ -415,6 +419,7 @@ async def fn_update_user(ctx, params: UserAdminParams) -> ActionResult:
 
 
 @chat.function("sharelock_delete_user", action_type="destructive",
+               event="sharelock-v2.sharelock_delete_user",
                effects=["delete:sharelock_user"],
                data_model=UserAdminResult,
                description=(

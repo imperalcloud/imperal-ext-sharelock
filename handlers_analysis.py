@@ -83,6 +83,7 @@ async def _prior_analysis_state(case_id: int, agency_id: str | None):
 
 
 @chat.function("run_analysis", action_type="write",
+               event="sharelock-v2.run_analysis",
                effects=["run:analysis"],
                data_model=RunAnalysisResponse,
                description=(
@@ -166,6 +167,7 @@ async def fn_run_analysis(ctx, params: RunAnalysisParams) -> ActionResult:
 
 
 @chat.function("cancel_analysis", action_type="write",
+               event="sharelock-v2.cancel_analysis",
                effects=["cancel:analysis"],
                data_model=CancelAnalysisResponse,
                description="Cancel the current analysis run for a case")
@@ -272,6 +274,7 @@ async def fn_review_analysis_gaps(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("continue_analysis", action_type="write",
+               event="sharelock-v2.continue_analysis",
                effects=["continue:analysis"],
                data_model=GapDecisionResponse,
                description="Continue analysis despite flagged gaps")
@@ -300,6 +303,7 @@ async def fn_continue_analysis(ctx, params: CaseIdParams) -> ActionResult:
 
 
 @chat.function("resume_with_new_evidence", action_type="write",
+               event="sharelock-v2.resume_with_new_evidence",
                effects=["pause:analysis"],
                data_model=GapDecisionResponse,
                description="Pause analysis so you can upload more evidence, then run again")

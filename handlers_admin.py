@@ -97,6 +97,7 @@ def _merge_settings(current: dict, params: SaveAgencySettingsParams) -> dict:
 
 
 @chat.function("save_agency_settings", action_type="write",
+               event="sharelock-v2.save_agency_settings",
                effects=["update:agency_settings"],
                data_model=SaveSettingsResponse,
                description=(

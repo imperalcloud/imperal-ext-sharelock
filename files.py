@@ -12,6 +12,7 @@ from datetime import datetime
 from xml.etree import ElementTree
 
 import httpx
+from imperal_sdk._shared_http import shared_http
 
 from app import NC_URL, NC_USER, NC_PASS, NC_BASE_PATH
 # Module-level on purpose: bare ext module names (app/queries/...) are only
@@ -91,7 +92,7 @@ class NextcloudWebDAV(StorageBackend):
         """List files in a directory via PROPFIND."""
         url = self._full_path(path) + "/"
         body = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getlastmodified/><d:getcontentlength/><d:getcontenttype/><d:resourcetype/></d:prop></d:propfind>'
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with shared_http(timeout=30.0) as c:
             r = await c.request("PROPFIND", url, auth=self._auth(),
                                 headers={"Depth": "1", "Content-Type": "application/xml"},
                                 content=body)
@@ -132,7 +133,7 @@ class NextcloudWebDAV(StorageBackend):
     async def upload(self, path: str, data: bytes, filename: str) -> FileInfo:
         """Upload a file via PUT."""
         url = self._full_path(f"{path}/{filename}")
-        async with httpx.AsyncClient(timeout=120.0) as c:
+        async with shared_http(timeout=120.0) as c:
             r = await c.put(url, auth=self._auth(), content=data)
             r.raise_for_status()
         return FileInfo(name=filename, path=f"{path}/{filename}", size=len(data))
@@ -140,7 +141,7 @@ class NextcloudWebDAV(StorageBackend):
     async def download(self, path: str) -> bytes:
         """Download a file via GET."""
         url = self._full_path(path)
-        async with httpx.AsyncClient(timeout=120.0) as c:
+        async with shared_http(timeout=120.0) as c:
             r = await c.get(url, auth=self._auth())
             r.raise_for_status()
             return r.content
@@ -148,14 +149,14 @@ class NextcloudWebDAV(StorageBackend):
     async def delete(self, path: str) -> bool:
         """Delete a file via DELETE."""
         url = self._full_path(path)
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with shared_http(timeout=30.0) as c:
             r = await c.request("DELETE", url, auth=self._auth())
             return r.status_code in (200, 204, 404)
 
     async def mkdir(self, path: str) -> bool:
         """Create directory via MKCOL."""
         url = self._full_path(path) + "/"
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with shared_http(timeout=30.0) as c:
             r = await c.request("MKCOL", url, auth=self._auth())
             return r.status_code in (201, 405)  # 405 = already exists
 

@@ -9,6 +9,7 @@ import logging
 from urllib.parse import unquote, quote
 
 import httpx
+from imperal_sdk._shared_http import shared_http
 
 from imperal_sdk import ui
 from app import ext, _user_id, _user_agency
@@ -217,7 +218,7 @@ async def _list_nc_folders(backend) -> list[str]:
         return []
     url = _dav_url(backend, "") + "/"
     try:
-        async with httpx.AsyncClient(timeout=15) as c:
+        async with shared_http(timeout=15) as c:
             r = await c.request("PROPFIND", url,
                                 auth=httpx.BasicAuth(backend.user, backend.password),
                                 headers={"Depth": "1", "Content-Type": "application/xml"},
@@ -251,7 +252,7 @@ async def _list_nc_files_recursive(backend, folder: str) -> list[dict]:
         return []
     url = _dav_url(backend, folder) + "/"
     try:
-        async with httpx.AsyncClient(timeout=30) as c:
+        async with shared_http(timeout=30) as c:
             r = await c.request("PROPFIND", url,
                                 auth=httpx.BasicAuth(backend.user, backend.password),
                                 headers={"Depth": "infinity", "Content-Type": "application/xml"},

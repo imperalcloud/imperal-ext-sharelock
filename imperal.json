@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.2.2",
+  "sdk_version": "5.9.13",
   "app_id": "sharelock-v2",
   "version": "3.9.6",
   "name": "Sharelock",
@@ -389,7 +389,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.create_case",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -518,7 +518,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.sync_cases",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -1197,7 +1197,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.run_analysis",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -1333,7 +1333,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.cancel_analysis",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -1704,7 +1704,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.continue_analysis",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -1852,7 +1852,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.resume_with_new_evidence",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -2008,7 +2008,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.share_case",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -2157,7 +2157,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.unshare_case",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -2604,7 +2604,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.upload_case_files",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -2855,7 +2855,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.save_agency_settings",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -3156,7 +3156,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.delete_case",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -3300,7 +3300,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.delete_file",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -3543,7 +3543,7 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "",
+      "event": "sharelock-v2.update_case",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6180,7 +6180,7 @@
         "title": "SignOutResult",
         "type": "object"
       },
-      "event": "",
+      "event": "sharelock-v2.sharelock_sign_out",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6255,7 +6255,7 @@
         "title": "InviteUserResult",
         "type": "object"
       },
-      "event": "",
+      "event": "sharelock-v2.sharelock_invite_user",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6339,7 +6339,7 @@
         "title": "RegisterUserResult",
         "type": "object"
       },
-      "event": "",
+      "event": "sharelock-v2.sharelock_register_user",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6502,7 +6502,7 @@
         "title": "UserAdminResult",
         "type": "object"
       },
-      "event": "",
+      "event": "sharelock-v2.sharelock_update_user",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6567,7 +6567,7 @@
         "title": "UserAdminResult",
         "type": "object"
       },
-      "event": "",
+      "event": "sharelock-v2.sharelock_delete_user",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -6582,5 +6582,31 @@
     "health_check": {
       "interval_sec": 60
     }
-  }
+  },
+  "panels": [
+    {
+      "panel_id": "sidebar",
+      "slot": "left",
+      "title": "Sharelock",
+      "tree": {},
+      "icon": "shield",
+      "refresh": "manual",
+      "center_overlay": false,
+      "default_width": 300,
+      "min_width": 240,
+      "max_width": 400
+    },
+    {
+      "panel_id": "dashboard",
+      "slot": "right",
+      "title": "Case Details",
+      "tree": {},
+      "icon": "file-text",
+      "refresh": "manual",
+      "center_overlay": false,
+      "default_width": 480,
+      "min_width": 360,
+      "max_width": 640
+    }
+  ]
 }

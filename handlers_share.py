@@ -49,6 +49,7 @@ class CaseSharesParams(BaseModel):
 
 
 @chat.function("share_case", action_type="write",
+               event="sharelock-v2.share_case",
                effects=["create:case_share"],
                data_model=ShareCaseResponse,
                description=(
@@ -84,6 +85,7 @@ async def fn_share_case(ctx, params: ShareCaseParams) -> ActionResult:
                   "imperal_id": colleague, "note": None},
             summary=(f"Case **{case_name}** (ID: {params.case_id}) shared "
                      f"with {colleague} — they now have read access."),
+            refresh_panels=["dashboard"],
         )
     except CasesAPIError as e:
         # 422 = no Sharelock account for that colleague in this agency.
@@ -96,6 +98,7 @@ async def fn_share_case(ctx, params: ShareCaseParams) -> ActionResult:
 
 
 @chat.function("unshare_case", action_type="write",
+               event="sharelock-v2.unshare_case",
                effects=["delete:case_share"],
                data_model=UnshareCaseResponse,
                description=(
@@ -122,6 +125,7 @@ async def fn_unshare_case(ctx, params: UnshareCaseParams) -> ActionResult:
                      f"{params.case_id}." if deleted else
                      f"No grant found for {colleague} on case "
                      f"{params.case_id} — nothing to revoke."),
+            refresh_panels=["dashboard"],
         )
     except CasesAPIError as e:
         return ActionResult.error(f"Revoke failed: {e.detail or e}",

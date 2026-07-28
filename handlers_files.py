@@ -71,6 +71,7 @@ def _limit_fact(case_id: int, reason: str) -> ActionResult:
 
 
 @chat.function("upload_case_files", action_type="write",
+               event="sharelock-v2.upload_case_files",
                effects=["create:file"],
                data_model=UploadReceipt,
                description=(
@@ -162,4 +163,5 @@ async def fn_upload_case_files(ctx, params: UploadCaseFilesParams) -> ActionResu
               "case_name": case_name, "files": uploaded, "failed": failed,
               "note": note},
         summary=summary,
+        refresh_panels=["dashboard"],
     )
