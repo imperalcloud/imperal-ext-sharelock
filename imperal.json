@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.13",
+  "sdk_version": "6.10.0",
   "app_id": "sharelock-v2",
   "version": "3.9.6",
   "name": "Sharelock",
